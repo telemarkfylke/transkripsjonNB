@@ -3,7 +3,6 @@
 # Deretter brukes ffmpeg til å trekke ut lyden fra videofilene
 # Skriptet bruker Nasjonalbibliotekets modell for gjenkjenning av tale
 # Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
-# Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
 # Telemark fylkeskommune // 2024-2025 // Lisens: CC BY-SA 4.0
 
 
@@ -12,8 +11,9 @@ from openai import OpenAI
 import pprint as pp
 from docx import Document
 
+# Bytt ut med ønsket modell
 dotenv.load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 client = OpenAI()
 
 # Importer srt-fil og legg innholdet i en variabel som heter tekst
@@ -27,7 +27,6 @@ with open(undertekstfil, "r") as file:
 
 # Systeminstruksjon
 systeminstruksjon = "Brukeren legger inn en tekst som er en transkripsjon av et møte eller foredrag. Teksten er formater som en srt-undertekstfil. Din oppgave er å lage et korrekt og nøyaktig referat av innholdet. Følg disse instruksene: 1. Det er viktig at oppsummeringen er helt riktig. 2. Skriv overskrifter når det er nytt tema. 3. Oppsummeringen skal være fyldig og beskrive hva det ble snakket om. 4. Oversett eller forklar forkortelser og fagbegreper når disse er vanskelige. 5. Bruk et klart og tydelig språk som er lett å forstå. 6. Oppsummeringen skal være på ca 1500 ord. 7. Oppsummeringen skal være på markdown-format. 8. Oppsummeringen skal være på " + språk + "."
-
 
 completion = client.chat.completions.create(
   model="gpt-4o",

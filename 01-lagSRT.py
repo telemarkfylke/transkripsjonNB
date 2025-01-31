@@ -62,7 +62,7 @@ for filename in os.listdir(sourcedir):
             srt_string = f"{i}\n{start_time_str} --> {end_time_str}\n{item['text']}\n"
             srt_data.append(srt_string)
 
-        # Sjekker om det er hallusinasjoner i teksten og fjerner disse (Sånn passe bra)
+        # Enkel Sjekk om det er hallusinasjoner i teksten og fjerner disse (Sånn passe bra)
         for i in range(1, len(srt_data)):
             if srt_data[i].split('\n')[2] == srt_data[i-1].split('\n')[2]:
                 hallusinasjonSjekk = True
