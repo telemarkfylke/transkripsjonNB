@@ -1,3 +1,12 @@
+# Program for å lese film og transkribere lyd for så å legge til undertekster
+# Skript for å konvertere m4v- og mp4-filer til mp3-filer
+# Deretter brukes ffmpeg til å trekke ut lyden fra videofilene
+# Skriptet bruker Nasjonalbibliotekets modell for gjenkjenning av tale
+# Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
+# Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
+# Telemark fylkeskommune // 2024-2025 // Lisens: CC BY-SA 4.0
+
+
 import os, dotenv
 from openai import OpenAI
 import pprint as pp

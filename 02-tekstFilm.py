@@ -3,8 +3,8 @@
 # Deretter brukes ffmpeg til å trekke ut lyden fra videofilene
 # Skriptet bruker Nasjonalbibliotekets modell for gjenkjenning av tale
 # Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
-# Laget av Tom Jarle Christiansen // Telemark fylkeskommune // 2024-2025
-# Lisenstype: CC BY-SA 4.0
+# Les mer om modellen her: https://huggingface.co/NbAiLab/nb-whisper-large
+# Telemark fylkeskommune // 2024-2025 // Lisens: CC BY-SA 4.0
 
 import ffmpeg, os
 
