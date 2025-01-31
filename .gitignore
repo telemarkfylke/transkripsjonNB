@@ -1,6 +1,7 @@
 .env
 
 backup/
+blobber/
 ferdig_tekst/
 filmer/
 lyd/
