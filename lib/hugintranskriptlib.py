@@ -1,4 +1,3 @@
-# Download file from azure blob storage
 import os, dotenv
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 import ffmpeg, os
@@ -8,18 +7,10 @@ from datetime import datetime, timedelta
 from openai import OpenAI
 import pprint as pp
 from docx import Document
+import os, requests
 
 
-dotenv.load_dotenv()
-client = OpenAI()
-
-AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
-filnavn = []
-metadata = []
-
-def download_blob(container_name, blob_name, download_file_path):
+def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
@@ -30,24 +21,26 @@ def download_blob(container_name, blob_name, download_file_path):
     print(f"Blob {blob_name} downloaded to {download_file_path}")
 
 # Functioon to list all blobs in a container
-def list_blobs(container_name):
+def list_blobs(AZURE_STORAGE_CONNECTION_STRING, container_name) -> list:
+    filnavn = []
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     container_client = blob_service_client.get_container_client(container_name)
     print("\nListing blobs...")
     for blob in container_client.list_blobs():
         print("\t" + blob.name)
         filnavn.append(blob.name)
+    return filnavn
 
 # Get metadata of a blob
-def get_blob_metadata(container_name, blob_name):
+def get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
     print("\nGetting blob metadata...")
     print("\t" + str(blob_client.get_blob_properties().metadata))
-    metadata.append(blob_client.get_blob_properties().metadata)
+    # metadata.append(blob_client.get_blob_properties().metadata)
 
 # Delete downloaded blob
-def delete_blob(container_name, blob_name):
+def delete_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
     print("\nDeleting blob...")
@@ -133,16 +126,3 @@ def oppsummering(sti, filnavn, metadata):
     doc = Document()
     doc.add_paragraph(completion.choices[0].message.content)
     doc.save("./oppsummeringer/" + oppsummering + ".docx")
-
-
-
-list_blobs(AZURE_STORAGE_CONTAINER_NAME)
-print("\n-----------------------------")
-for i in range(len(filnavn)):
-    print("\n-----------------------------")
-    print(f"Blob {i}: {filnavn[i]}")
-    get_blob_metadata(AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
-    download_blob(AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
-    # delete_blob(AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
-    transkriber("./blobber/", filnavn[i])
-    oppsummering("./ferdig_tekst/", filnavn[i], metadata[i])

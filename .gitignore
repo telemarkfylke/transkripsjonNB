@@ -1,5 +1,7 @@
 .env
 
+__pycache__/
+
 backup/
 blobber/
 ferdig_tekst/
