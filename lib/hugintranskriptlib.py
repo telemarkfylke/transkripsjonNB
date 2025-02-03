@@ -38,6 +38,7 @@ def get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name
     print("\nGetting blob metadata...")
     print("\t" + str(blob_client.get_blob_properties().metadata))
     # metadata.append(blob_client.get_blob_properties().metadata)
+    return blob_client.get_blob_properties().metadata
 
 # Delete downloaded blob
 def delete_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
