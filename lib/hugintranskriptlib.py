@@ -127,3 +127,48 @@ def oppsummering(sti, filnavn, metadata):
     doc = Document()
     doc.add_paragraph(completion.choices[0].message.content)
     doc.save("./oppsummeringer/" + oppsummering + ".docx")
+
+# Sender oppsummering på epost med MS graph-apiet
+def send_email(token, recipient, subject, body, attachment=None):
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'message': {
+            'subject': subject,
+            'body': {
+                'contentType': 'Text',
+                'content': body
+            },
+            'toRecipients': [
+                {
+                    'emailAddress': {
+                        'address': recipient
+                    }
+                }
+            ]
+        }
+    }
+    if attachment:
+        data['message']['attachments'] = [
+            {
+                '@odata.type': '#microsoft.graph.fileAttachment',
+                'name': 'oppsummering.md',
+                'contentBytes': attachment
+            }
+        ]
+
+    response = requests.post('https://graph.microsoft.com/v1.0/me/sendMail', headers=headers, json=data)
+    
+    # Print the raw response text for debugging
+    print(response.text)
+    
+    # Attempt to parse the response as JSON
+    try:
+        print(response.json())
+    except requests.exceptions.JSONDecodeError:
+        print("Response is not in JSON format")
+
+# Example usage
+# send_email(GRAPH_JWT_TOKEN, "fuzzbin@gmail.com", "Oppsummering", "Hei", encoded_content)
