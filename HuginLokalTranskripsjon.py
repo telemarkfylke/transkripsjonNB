@@ -21,7 +21,7 @@ AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
 GRAPH_JWT_TOKEN = os.getenv("GRAPH_JWT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 filnavn = []
-metadata = []
+metadata = ""
 
 # Transkriber blob og lagrer i SRT-fil
 def transkriber(sti, filnavn):
@@ -108,17 +108,17 @@ print("\n-----------------------------")
 for i in range(len(filnavn)):
     print("\n-----------------------------")
     print(f"Blob {i}: {filnavn[i]}")
-    metadata.append(htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i]))
+    metadata = htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
     htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
     htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
     transkriber("./blobber/", filnavn[i])
-    oppsummering("./ferdig_tekst/", filnavn[i], metadata[i])
+    oppsummering("./ferdig_tekst/", filnavn[i], metadata)
 
     # Ecode the file to base64
     with open(f"./oppsummeringer/{filnavn[i]}.md" , "rb") as file:
         base64file = base64.b64encode(file.read()).decode('utf-8')
     
-    htl.send_email(GRAPH_JWT_TOKEN, "fuzzbin@gmail.com", "Oppsummering", "Hei og hadet", base64file)
+    htl.send_email(GRAPH_JWT_TOKEN, metadata["upn"], "Oppsummering", "Hei! Her er oppsummeirngen", base64file)
 
         # Delete file from local storage
     os.remove(f"./blobber/{filnavn[i]}")
