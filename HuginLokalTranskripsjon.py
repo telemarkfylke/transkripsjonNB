@@ -21,19 +21,18 @@ AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
 GRAPH_JWT_TOKEN = os.getenv("GRAPH_JWT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 
-# Empty dictionayr for metadat
-metadata = {}
-
 filnavn = htl.list_blobs(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME)
 print("\n-----------------------------")
+
 for i in range(len(filnavn)):
     print("\n-----------------------------")
     print(f"Blob {i}: {filnavn[i]}")
     metadata = htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
+    print("Sendes: ", metadata['format'], metadata['spraak'])
     htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
     htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
     htl.transkriber("./blobber/", filnavn[i])
-    htl.oppsummering("./ferdig_tekst/", filnavn[i], metadata["format"])
+    htl.oppsummering("./ferdig_tekst/", filnavn[i], metadata['spraak'] ,metadata['format'])
 
     # Ecode the file to base64
     with open(f"./oppsummeringer/{filnavn[i]}.docx" , "rb") as file:
