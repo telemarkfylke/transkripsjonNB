@@ -99,13 +99,19 @@ def transkriber(sti, filnavn):
         print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn}.srt')
 
 # Lag oppsummeringer
-def oppsummering(sti, filnavn, metadata):
+def oppsummering(sti, filnavn, språk, format):
     client = OpenAI()
     # Importer srt-fil og legg innholdet i en variabel som heter tekst
     undertekstfil = sti + filnavn + ".srt"
     tekst = ""
-    språk = "norsk"
-    format = "fyldig_oppsummering"
+    if språk != "":
+        språk = "norsk"
+    else:
+        språk = språk
+    if format != "":
+        format = "oppsummering"
+    else:
+        format = format
     oppsummering = filnavn
 
     with open(undertekstfil, "r") as file:

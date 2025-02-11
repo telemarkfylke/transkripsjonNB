@@ -33,7 +33,7 @@ for i in range(len(filnavn)):
     htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
     htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
     htl.transkriber("./blobber/", filnavn[i])
-    htl.oppsummering("./ferdig_tekst/", filnavn[i], "fyldig_oppsummering")
+    htl.oppsummering("./ferdig_tekst/", filnavn[i], metadata["format"])
 
     # Ecode the file to base64
     with open(f"./oppsummeringer/{filnavn[i]}.docx" , "rb") as file:
@@ -44,6 +44,6 @@ for i in range(len(filnavn)):
 
     # Delete file from local storage
     os.remove(f"./blobber/{filnavn[i]}")
-    # os.remove(f"./ferdig_tekst/{filnavn[i]}.srt")
-    # os.remove(f"./oppsummeringer/{filnavn[i]}.md")
-    # os.remove(f"./oppsummeringer/{filnavn[i]}.docx")
+    os.remove(f"./ferdig_tekst/{filnavn[i]}.srt")
+    os.remove(f"./oppsummeringer/{filnavn[i]}.md")
+    os.remove(f"./oppsummeringer/{filnavn[i]}.docx")
