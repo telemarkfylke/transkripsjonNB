@@ -1,20 +1,18 @@
 import os, dotenv
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
-import ffmpeg, os
 from transformers import pipeline
 import json
 from datetime import datetime, timedelta
 from openai import OpenAI
 import pprint as pp
 from docx import Document
-import os, requests
+import requests
 
 dotenv.load_dotenv()
 MAIL_API_URL = os.getenv("MAIL_API_URL")
 MAIL_API_KEY = os.getenv("MAIL_API_KEY") 
 
 # Funksjoner
-
 def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
@@ -145,12 +143,10 @@ def oppsummering(sti, filnavn, metadata):
 def send_email(recipient, attachment=None):
     payload = {
         "to": [recipient],
-        "cc": ["fuzzbin@gmail.com"],
-        "bcc": ["fuzzbin@gmail.com"],
         "from": "Hugin - Transkripsjonsbotten <ikke-svar@huginbotten.no>",
-        "subject": "Python - Transkribering",
-        "text": "Heihei",
-        "html": "<b>Heihei</b>",
+        "subject": "Transkribering",
+        "text": "Hei! Her er en oppsummering av transkriberingen.",
+        "html": "<b>Hei!</b><p>Her er en oppsummering av transkriberingen.</p>",
         "attachments": [
             {
                 "content": attachment,
