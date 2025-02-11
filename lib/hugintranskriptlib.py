@@ -9,6 +9,11 @@ import pprint as pp
 from docx import Document
 import os, requests
 
+dotenv.load_dotenv()
+MAIL_API_URL = os.getenv("MAIL_API_URL")
+MAIL_API_KEY = os.getenv("MAIL_API_KEY") 
+
+# Funksjoner
 
 def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
@@ -97,17 +102,27 @@ def transkriber(sti, filnavn):
 
 # Lag oppsummeringer
 def oppsummering(sti, filnavn, metadata):
+    client = OpenAI()
     # Importer srt-fil og legg innholdet i en variabel som heter tekst
     undertekstfil = sti + filnavn + ".srt"
     tekst = ""
-    språk = metadata["spraak"]
+    språk = "norsk"
+    format = "fyldig_oppsummering"
     oppsummering = filnavn
 
     with open(undertekstfil, "r") as file:
         tekst = file.read()
 
-    # Systeminstruksjon
-    systeminstruksjon = "Brukeren legger inn en tekst som er en transkripsjon av et møte eller foredrag. Teksten er formater som en srt-undertekstfil. Din oppgave er å lage et korrekt og nøyaktig referat av innholdet. Følg disse instruksene: 1. Det er viktig at oppsummeringen er helt riktig. 2. Skriv overskrifter når det er nytt tema. 3. Oppsummeringen skal være fyldig og beskrive hva det ble snakket om. 4. Oversett eller forklar forkortelser og fagbegreper når disse er vanskelige. 5. Bruk et klart og tydelig språk som er lett å forstå. 6. Oppsummeringen skal være på ca 1500 ord. 7. Oppsummeringen skal være på markdown-format. 8. Oppsummeringen skal være på " + språk + "."
+    # Systeminstruksjoner
+    systeminstruksjon_oppsummering = "Brukeren legger inn en tekst som er en transkripsjon av et møte eller foredrag. Teksten er formatert som en srt-undertekstfil. Din oppgave er å lage et korrekt og nøyaktig referat av innholdet. Følg disse instruksene: 1. Det er viktig at oppsummeringen er helt riktig. 2. Skriv overskrifter når det er nytt tema. 3. Oppsummeringen skal være fyldig og beskrive hva det ble snakket om. 4. Oversett eller forklar forkortelser og fagbegreper når disse er vanskelige. 5. Bruk et klart og tydelig språk som er lett å forstå. 6. Oppsummeringen skal være på ca 1500 ord. 7. Oppsummeringen skal være på markdown-format. 8. Oppsummeringen skal være på " + språk + ". 9. Viktig: Formen på oppsummeringen skal være på formatet:" + format + ". Her er srt-filen:"
+    
+    systeminstruksjon_moteref = "Du har fått i oppgave å lage et møtereferat fra en SRT-fil som inneholder tekstutskrift med tidsmerker fra et møte. Her er instruksjonene for å lage et effektivt og nøyaktig referat: Tidsmerker: Ignorer de eksakte tidsmerkene, men bruk dem som referanse for å identifisere skift i topics eller start/slutt på ulike diskusjonspunkter. Identifisering: Forsøk å identifisere forskjellige stemmer/talere dersom det er mulig, og tilordne kommentarer til riktig person. Bruk generelle beskrivelser som 'Leder', 'Deltaker 1', med mindre det er spesifikke navn. Konsistens: Oppsummer lange diskusjoner kortfattet, men behold alle viktige detaljer og beslutninger. Utelat fyllstoff som ikke påvirker forståelsen av møtet. Struktur: Organiser referatet i seksjoner basert på møteagendaen, hvis tilgjengelig. Hvis ikke, del inn i logiske seksjoner som diskuterer forskjellige emner. Beslutninger og Oppfølging: Sørg for at alle beslutninger, oppfølgingspunkter, og ansvarlige personer er tydelig notert. Språk: Sikre at språket er klart og profesjonelt, hvor teknisk terminologi er forklart eller utdypet dersom det kan bli misforstått. Du skal aldri skrive noe som ikke er sagt i møtet! Det er veldig viktig at du kune skriver ting som er sagt i møtet. Vennligst les gjennom SRT-filen og lag et møtereferat som følger disse retningslinjene. Her er SRT-filen:"
+
+    systeminstruksjon = ""
+    if format == "møtereferat":
+        systeminstruksjon = systeminstruksjon_moteref
+    else:
+        systeminstruksjon = systeminstruksjon_oppsummering
 
     completion = client.chat.completions.create(
     model="gpt-4o",
@@ -116,8 +131,6 @@ def oppsummering(sti, filnavn, metadata):
         {"role": "user", "content": tekst}
     ]
     )
-
-    pp.pprint(completion.choices[0].message.content)
 
     # Write to markdown file
     with open("./oppsummeringer/" + oppsummering + ".md", "w") as file:
@@ -128,47 +141,32 @@ def oppsummering(sti, filnavn, metadata):
     doc.add_paragraph(completion.choices[0].message.content)
     doc.save("./oppsummeringer/" + oppsummering + ".docx")
 
-# Sender oppsummering på epost med MS graph-apiet
-def send_email(token, recipient, subject, body, attachment=None):
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        'message': {
-            'subject': subject,
-            'body': {
-                'contentType': 'Text',
-                'content': body
-            },
-            'toRecipients': [
-                {
-                    'emailAddress': {
-                        'address': recipient
-                    }
-                }
-            ]
-        }
-    }
-    if attachment:
-        data['message']['attachments'] = [
+# Sender oppsummering på epost
+def send_email(recipient, attachment=None):
+    payload = {
+        "to": [recipient],
+        "cc": ["fuzzbin@gmail.com"],
+        "bcc": ["fuzzbin@gmail.com"],
+        "from": "Hugin - Transkripsjonsbotten <ikke-svar@huginbotten.no>",
+        "subject": "Python - Transkribering",
+        "text": "Heihei",
+        "html": "<b>Heihei</b>",
+        "attachments": [
             {
-                '@odata.type': '#microsoft.graph.fileAttachment',
-                'name': 'oppsummering.md',
-                'contentBytes': attachment
+                "content": attachment,
+                "filename": "oppsummering.docx",
+                "type": "application/json"
             }
         ]
+    }
 
-    response = requests.post('https://graph.microsoft.com/v1.0/me/sendMail', headers=headers, json=data)
-    
-    # Print the raw response text for debugging
-    print(response.text)
-    
-    # Attempt to parse the response as JSON
-    try:
-        print(response.json())
-    except requests.exceptions.JSONDecodeError:
-        print("Response is not in JSON format")
+    headers = {
+        'Accept': '*/*',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+        'x-functions-key': MAIL_API_KEY
+    }
 
-# Example usage
-# send_email(GRAPH_JWT_TOKEN, "fuzzbin@gmail.com", "Oppsummering", "Hei", encoded_content)
+    response = requests.post(MAIL_API_URL, headers=headers, data=json.dumps(payload))
+    print(response)
+
