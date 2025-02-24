@@ -1,4 +1,5 @@
 import os, dotenv
+import ffmpeg
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from transformers import pipeline
 import json
@@ -11,6 +12,9 @@ import requests
 dotenv.load_dotenv()
 MAIL_API_URL = os.getenv("MAIL_API_URL")
 MAIL_API_KEY = os.getenv("MAIL_API_KEY") 
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # Funksjoner
 def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
@@ -51,10 +55,20 @@ def delete_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
     blob_client.delete_blob()
     print("\tBlob deleted")
 
+# Konverterer video til lyd
+def konverter_til_lyd(filnavn, nytt_filnavn):
+    # Konverterer video til lyd
+    print(f'Konverterer {filnavn} til lyd.')
+    stream = ffmpeg.input(filnavn)
+    stream = ffmpeg.output(stream, nytt_filnavn)
+    ffmpeg.input(filnavn).output(nytt_filnavn, acodec='libmp3lame', format='mp3').run()
+    # ffmpeg.run(stream, overwrite_output=True)
+    print(f'Konvertering ferdig. Lydfilen er lagret som {nytt_filnavn}')
+
 # Transkriber blob og lagrer i SRT-fil
 def transkriber(sti, filnavn):
      # Laster inn KI-modellen fra Huggingface
-        asr = pipeline("automatic-speech-recognition", "NbAiLab/nb-whisper-medium") # Sett device='cuda' eller device='cpu' om ønskelig
+        asr = pipeline("automatic-speech-recognition", "NbAiLab/nb-whisper-medium", device="cpu") # Sett device='cuda' eller device='cpu' om ønskelig
 
         # Transkriberer lydfilen til tekst i JSON-format
         print(f'Transkriberer lyd fra {filnavn} til tekst. Obs: Dette er en tidkrevende prosess.')
@@ -90,7 +104,7 @@ def transkriber(sti, filnavn):
                 srt_data_vasket.append(srt_data[i-1])
 
         # Skriver til SRT-fil
-        with open(f"./ferdig_tekst/{filnavn}.srt", 'w', encoding='utf-8') as f:
+        with open(f"./ferdig_tekst/{filnavn.split(".")[0]}.srt", 'w', encoding='utf-8') as f:
             f.write('\n'.join(srt_data_vasket))
         with open('raw.json', 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4)
@@ -145,6 +159,21 @@ def oppsummering(sti, filnavn, språk, format):
     doc.add_paragraph(completion.choices[0].message.content)
     doc.save("./oppsummeringer/" + oppsummering + ".docx")
 
+# Konverterer srt-fil til ren telst med kun tekst uten tidskoder og index
+def srt_til_tekst(filnavn):
+    with open("./ferdig_tekst/" +  filnavn, 'r', encoding='utf-8') as f:
+        srt_data = f.readlines()
+
+    ren_tekst = []
+    for i in range(0, len(srt_data)):
+        if srt_data[i].startswith(" ") and srt_data[i].endswith("\n"):
+            ren_tekst.append(srt_data[i])
+
+    # Skriv for hvert element i ren_tekst skriv en ny linje i en docx-fil
+    with open("./oppsummeringer/" + filnavn.split(".")[0] + ".txt", 'w', encoding='utf-8') as f:
+        f.write("".join(ren_tekst))
+
+
 # Sender oppsummering på epost
 def send_email(recipient, attachment=None):
     payload = {
@@ -156,7 +185,7 @@ def send_email(recipient, attachment=None):
         "attachments": [
             {
                 "content": attachment,
-                "filename": "oppsummering.docx",
+                "filename": "transkripsjon.srt",
                 "type": "application/json"
             }
         ]
