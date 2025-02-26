@@ -21,20 +21,20 @@ def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, do
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
-    print("\nDownloading blob to \n\t" + download_file_path)
+    print("Downloading blob to: " + download_file_path)
 
     with open(download_file_path, "wb") as download_file:
         download_file.write(blob_client.download_blob().readall())
-    print(f"Blob {blob_name} downloaded to {download_file_path}")
+    print(f"Blob {blob_name} successfully downloaded to {download_file_path}")
 
 # Functioon to list all blobs in a container
 def list_blobs(AZURE_STORAGE_CONNECTION_STRING, container_name) -> list:
     filnavn = []
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     container_client = blob_service_client.get_container_client(container_name)
-    print("\nListing blobs...")
+    print("Listing blobs...")
     for blob in container_client.list_blobs():
-        print("\t" + blob.name)
+        print(blob.name)
         filnavn.append(blob.name)
     return filnavn
 
@@ -42,8 +42,7 @@ def list_blobs(AZURE_STORAGE_CONNECTION_STRING, container_name) -> list:
 def get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-    print("\nGetting blob metadata...")
-    print("\t" + str(blob_client.get_blob_properties().metadata))
+    print("Blob metadata: " + str(blob_client.get_blob_properties().metadata))
     # metadata.append(blob_client.get_blob_properties().metadata)
     return blob_client.get_blob_properties().metadata
 
@@ -51,9 +50,9 @@ def get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name
 def delete_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-    print("\nDeleting blob...")
+    print("Deleting blob: " + blob_name)
     blob_client.delete_blob()
-    print("\tBlob deleted")
+    print("Blob deleted")
 
 # Konverterer video til lyd
 def konverter_til_lyd(filnavn, nytt_filnavn):
@@ -185,7 +184,7 @@ def send_email(recipient, attachment=None):
         "attachments": [
             {
                 "content": attachment,
-                "filename": "transkripsjon.srt",
+                "filename": "transkripsjon.txt",
                 "type": "application/json"
             }
         ]
