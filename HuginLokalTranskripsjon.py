@@ -36,11 +36,11 @@ for i in range(len(filnavn)):
     htl.srt_til_tekst(filnavn[i].split(".")[0] + ".srt")
 
     # Encode the file to base64
-    with open(f"./oppsummeringer/{filnavn[i].split(".")[0]}.txt" , "rb") as file:
+    with open(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt" , "rb") as file:
        base64file = base64.b64encode(file.read()).decode('utf-8')
 
     # Convert and write to docx
-    with open(f"./oppsummeringer/{filnavn[i].split(".")[0]}.txt", "r") as file:
+    with open(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt", "r") as file:
        text = file.read()
        doc = Document()
        doc.add_paragraph(text)
@@ -51,8 +51,9 @@ for i in range(len(filnavn)):
     htl.send_email(metadata[i]["upn"], base64file)
 
     # Delete file from local storage
-    os.remove(f"./blobber/{filnavn[i]}")
-    os.remove(f"./ferdig_tekst/{filnavn[i].split(".")[0]}.srt")
-    # os.remove(f"./oppsummeringer/{filnavn[i]}.md")
-    #os.remove(f"./oppsummeringer/{filnavn[i]}.docx")
+    # os.remove(f"./blobber/{filnavn[i]}")
+    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.srt")
+    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt")
+    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt")
+    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
 print("Logging slutt: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))

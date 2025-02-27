@@ -1,0 +1,50 @@
+Logging startet: 2025-02-27 13:10:36
+Listing blobs...
+1740656148423-audio_king.mp3
+1740657928514-mittopptak.wav
+Blob 0: 1740656148423-audio_king.mp3
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'tom.jarle.christiansen@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740656148423-audio_king.mp3
+Blob 1740656148423-audio_king.mp3 successfully downloaded to ./blobber/1740656148423-audio_king.mp3
+Deleting blob: 1740656148423-audio_king.mp3
+Blob deleted
+Blob 1: 1740657928514-mittopptak.wav
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'matthias.veel.krauss@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740657928514-mittopptak.wav
+Blob 1740657928514-mittopptak.wav successfully downloaded to ./blobber/1740657928514-mittopptak.wav
+Deleting blob: 1740657928514-mittopptak.wav
+Blob deleted
+Transkriberer lyd fra 1740656148423-audio_king.mp3 til tekst. Obs: Dette er en tidkrevende prosess.
+Logging startet: 2025-02-27 13:20:10
+Listing blobs...
+1740658400718-mittopptak.wav
+1740658402074-mittopptak.wav
+1740658404227-mittopptak.wav
+1740658405746-mittopptak.wav
+Blob 0: 1740658400718-mittopptak.wav
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'matthias.veel.krauss@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740658400718-mittopptak.wav
+Blob 1740658400718-mittopptak.wav successfully downloaded to ./blobber/1740658400718-mittopptak.wav
+Deleting blob: 1740658400718-mittopptak.wav
+Blob deleted
+Blob 1: 1740658402074-mittopptak.wav
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'matthias.veel.krauss@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740658402074-mittopptak.wav
+Blob 1740658402074-mittopptak.wav successfully downloaded to ./blobber/1740658402074-mittopptak.wav
+Deleting blob: 1740658402074-mittopptak.wav
+Blob deleted
+Blob 2: 1740658404227-mittopptak.wav
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'matthias.veel.krauss@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740658404227-mittopptak.wav
+Blob 1740658404227-mittopptak.wav successfully downloaded to ./blobber/1740658404227-mittopptak.wav
+Deleting blob: 1740658404227-mittopptak.wav
+Blob deleted
+Blob 3: 1740658405746-mittopptak.wav
+Blob metadata: {'spraak': '', 'format': '', 'upn': 'matthias.veel.krauss@telemarkfylke.no'}
+Downloading blob to: ./blobber/1740658405746-mittopptak.wav
+Blob 1740658405746-mittopptak.wav successfully downloaded to ./blobber/1740658405746-mittopptak.wav
+Deleting blob: 1740658405746-mittopptak.wav
+Blob deleted
+Transkriberer lyd fra 1740658400718-mittopptak.wav til tekst. Obs: Dette er en tidkrevende prosess.
+Logging startet: 2025-02-27 13:30:10
+Listing blobs...
