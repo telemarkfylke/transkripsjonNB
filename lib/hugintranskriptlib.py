@@ -67,7 +67,7 @@ def konverter_til_lyd(filnavn, nytt_filnavn):
 # Transkriber blob og lagrer i SRT-fil
 def transkriber(sti, filnavn):
      # Laster inn KI-modellen fra Huggingface
-        asr = pipeline("automatic-speech-recognition", "NbAiLab/nb-whisper-medium", device="cpu") # Sett device='cuda' eller device='cpu' om ønskelig
+        asr = pipeline("automatic-speech-recognition", "NbAiLab/nb-whisper-medium", device="mps") # Sett device='cuda' eller device='cpu' om ønskelig
 
         # Transkriberer lydfilen til tekst i JSON-format
         print(f'Transkriberer lyd fra {filnavn} til tekst. Obs: Dette er en tidkrevende prosess.')
@@ -77,8 +77,6 @@ def transkriber(sti, filnavn):
         data = json_tekst
         srt_data = []
         tekst_data = []
-        srt_data_vasket = []
-        hallusinasjonSjekk = False
  
         # Looper over JSON-rådataen og formaterer den til SRT- og tekst-format
         for i, item in enumerate(data["chunks"], start=1):
@@ -94,18 +92,6 @@ def transkriber(sti, filnavn):
 
             # Lager tekststrengen og legger den til i listen
             tekst_data.append(f"{item['text']}\n")
-
-
-        # # Enkel Sjekk om det er hallusinasjoner i teksten og fjerner disse (Sånn passe bra)
-        # for i in range(1, len(srt_data)):
-        #     if srt_data[i].split('\n')[2] == srt_data[i-1].split('\n')[2]:
-        #         hallusinasjonSjekk = True
-        #         # srt_data_vasket.append("x")
-        #     elif hallusinasjonSjekk:
-        #         hallusinasjonSjekk = False
-        #         # srt_data_vasket.append("x")
-        #     else:
-        #         srt_data_vasket.append(srt_data[i-1])
 
         # Skriver til SRT-fil
         with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.srt", 'w', encoding='utf-8') as f:

@@ -48,12 +48,12 @@ for i in range(len(filnavn)):
        
 
     # Send mail
-    htl.send_email(metadata[i]["upn"], base64file)
+    # htl.send_email(metadata[i]["upn"], base64file)
 
     # Delete file from local storage
     # os.remove(f"./blobber/{filnavn[i]}")
-    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.srt")
-    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt")
-    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt")
-    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
+    # os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.srt")
+    # os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt")
+    # os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt")
+    # os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
 print("Logging slutt: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
