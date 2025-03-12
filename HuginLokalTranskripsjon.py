@@ -4,6 +4,7 @@ from openai import OpenAI
 import pprint as pp
 import base64
 from docx import Document
+import logging
 
 # Ignore warnings
 import warnings
@@ -18,42 +19,53 @@ AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 
-print("Logging startet: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-filnavn = htl.list_blobs(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME)
-metadata = []
+logging.basicConfig(level=logging.INFO)
 
-for i in range(len(filnavn)):
-    print(f"Blob {i}: {filnavn[i]}")
-    metadata.append(htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i]))
-    htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
-    htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
+try:
+    print("Logging startet: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    filnavn = htl.list_blobs(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME)
+    metadata = []
 
-for i in range(len(filnavn)):
-    if filnavn[i].split(".")[1] == "mp4" or filnavn[i].split(".")[1] == "mov" or filnavn[i].split(".")[1] == "avi":
-        htl.konverter_til_lyd(f"./blobber/{filnavn[i]}", f"./blobber/{filnavn[i].split('.')[0]}.wav")
-    htl.transkriber("./blobber/", filnavn[i])
-    # htl.oppsummering("./ferdig_tekst/", filnavn[i], metadata[i]['spraak'] ,metadata[i]['format'])
-    htl.srt_til_tekst(filnavn[i].split(".")[0] + ".srt")
+    for i in range(len(filnavn)):
+        print(f"Blob {i}: {filnavn[i]}")
+        metadata.append(htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i]))
+        htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i], "./blobber/" + filnavn[i])
+        htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filnavn[i])
 
-    # Encode the file to base64
-    with open(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt" , "rb") as file:
-       base64file = base64.b64encode(file.read()).decode('utf-8')
+    for i in range(len(filnavn)):
+        if filnavn[i].split(".")[1] == "mp4" or filnavn[i].split(".")[1] == "mov" or filnavn[i].split(".")[1] == "avi":
+            htl.konverter_til_lyd(f"./blobber/{filnavn[i]}", f"./blobber/{filnavn[i].split('.')[0]}.wav")
+        htl.transkriber("./blobber/", filnavn[i])
+        # htl.oppsummering("./ferdig_tekst/", filnavn[i], metadata[i]['spraak'] ,metadata[i]['format'])
+        htl.srt_til_tekst(filnavn[i].split(".")[0] + ".srt")
 
-    # Convert and write to docx
-    with open(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt", "r") as file:
-       text = file.read()
-       doc = Document()
-       doc.add_paragraph(text)
-       doc.save(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
-       
+        # Encode the file to base64
+        with open(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt" , "rb") as file:
+            base64file = base64.b64encode(file.read()).decode('utf-8')
 
-    # Send mail
-    htl.send_email(metadata[i]["upn"], base64file)
+        # Convert and write to docx
+        with open(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt", "r") as file:
+            text = file.read()
+            doc = Document()
+            doc.add_paragraph(text)
+            doc.save(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
+        
 
-    # Delete file from local storage
-    os.remove(f"./blobber/{filnavn[i]}")
-    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.srt")
-    os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt")
-    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt")
-    os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
-print("Logging slutt: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        # Send mail
+        htl.send_email(metadata[i]["upn"], base64file)
+
+        # Delete file from local storage
+        os.remove(f"./blobber/{filnavn[i]}")
+        os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.srt")
+        os.remove(f"./ferdig_tekst/{filnavn[i].split('.')[0]}.txt")
+        os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.txt")
+        os.remove(f"./oppsummeringer/{filnavn[i].split('.')[0]}.docx")
+
+    print("Logging slutt: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    # Logg til fil huginlog.txt
+    with open("huginlog.txt", "a") as log_file:
+        for i in range(len(filnavn)):
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())} -> Blob {i}: {filnavn[i]} processed successfully " + "\n")
+
+except Exception as e:
+    logging.exception(f"An error occurred in HuginLokalTranskripsjon: {e}")
