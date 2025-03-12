@@ -1,0 +1,3 @@
+Device set to use mps
+You have passed task=transcribe, but also have set `forced_decoder_ids` to [[1, 50288], [2, 50359], [3, 50363]] which creates a conflict. `forced_decoder_ids` will be ignored in favor of task=transcribe.
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.

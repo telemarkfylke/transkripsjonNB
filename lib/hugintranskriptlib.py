@@ -166,7 +166,6 @@ def srt_til_tekst(filnavn):
     with open("./oppsummeringer/" + filnavn.split(".")[0] + ".txt", 'w', encoding='utf-8') as f:
         f.write("".join(ren_tekst))
 
-
 # Sender oppsummering på epost
 def send_email(recipient, attachment=None):
     payload = {
@@ -193,3 +192,7 @@ def send_email(recipient, attachment=None):
 
     response = requests.post(MAIL_API_URL, headers=headers, data=json.dumps(payload))
     print(response)
+
+# ToDo: Send transkribering som chat i teams til innlogget bruker
+def sendTeamsChat():
+    pass
