@@ -52,7 +52,8 @@ try:
         
 
         # Send mail
-        htl.send_email(metadata[i]["upn"], base64file)
+        # htl.send_email(metadata[i]["upn"], base64file)
+        htl.sendTeamsChat(metadata[i]["upn"], base64file)
 
         # Delete file from local storage
         os.remove(f"./blobber/{filnavn[i]}")
