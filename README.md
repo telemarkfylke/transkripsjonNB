@@ -53,6 +53,8 @@ An automated Norwegian transcription service using the National Library of Norwa
    launchctl load ~/Library/LaunchAgents/com.tfk.hugin-transcription.plist
    ```
 
+   > **Note**: The install script automatically creates the plist file. You can also manually copy and customize `com.tfk.hugin-transcription.plist.example` if needed.
+
 ## 🔧 Configuration
 
 Create a `.env` file in the project root with:
