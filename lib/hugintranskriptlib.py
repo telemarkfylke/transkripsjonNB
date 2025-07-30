@@ -1,21 +1,58 @@
-import os, dotenv
+import os
+import logging
+import time
+
+# Ensure ffmpeg is in PATH
+os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
+
 import ffmpeg
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from transformers import pipeline
 import json
 from datetime import datetime, timedelta
 from openai import OpenAI
-import pprint as pp
 from docx import Document
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import dotenv
 
 dotenv.load_dotenv()
-MAIL_API_URL = os.getenv("MAIL_API_URL")
-MAIL_API_KEY = os.getenv("MAIL_API_KEY")
 LOGIC_APP_CHAT_URL = os.getenv("LOGIC_APP_CHAT_URL")
 
 import warnings
 warnings.filterwarnings("ignore")
+
+# Konfigurer logging
+logger = logging.getLogger(__name__)
+
+def create_requests_session():
+    """Opprett en requests session med retry-strategi og timeout"""
+    session = requests.Session()
+    
+    # Bruk riktig parameter navn for kompatibilitet med nye urllib3 versjoner
+    try:
+        # Prøv først nye parameter navn (urllib3 >=1.26)
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "DELETE"],
+            backoff_factor=1
+        )
+    except TypeError:
+        # Fall tilbake til gamle parameter navn (urllib3 <1.26)
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            method_whitelist=["HEAD", "GET", "POST", "DELETE"],
+            backoff_factor=1
+        )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    return session
 
 # Funksjoner
 def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
@@ -72,7 +109,7 @@ def transkriber(sti, filnavn):
 
         # Transkriberer lydfilen til tekst i JSON-format
         print(f'Transkriberer lyd fra {filnavn} til tekst. Obs: Dette er en tidkrevende prosess.')
-        json_tekst = asr(sti + filnavn, chunk_length_s=28, return_timestamps=True, generate_kwargs={'num_beams': 5, 'language': 'no'})
+        json_tekst = asr(sti + filnavn, chunk_length_s=28, return_timestamps=True, generate_kwargs={'language': 'no'})
 
         # Laster inn JSON-dataen
         data = json_tekst
@@ -94,6 +131,9 @@ def transkriber(sti, filnavn):
             # Lager tekststrengen og legger den til i listen
             tekst_data.append(f"{item['text']}\n")
 
+        # Sørg for at utdata-mappe eksisterer
+        os.makedirs("./ferdig_tekst", exist_ok=True)
+        
         # Skriver til SRT-fil
         with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.srt", 'w', encoding='utf-8') as f:
             f.write('\n'.join(srt_data))
@@ -103,7 +143,7 @@ def transkriber(sti, filnavn):
             f.write('\n'.join(tekst_data))
         
 
-        print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn}')
+        print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn.split(".")[0]}.srt og .txt')
 
 # Lag oppsummeringer
 def oppsummering(sti, filnavn, språk, format):
@@ -144,7 +184,10 @@ def oppsummering(sti, filnavn, språk, format):
     ]
     )
 
-    # Write to markdown file
+    # Sørg for at utdata-mappe eksisterer
+    os.makedirs("./oppsummeringer", exist_ok=True)
+    
+    # Skriv til markdown-fil
     with open("./oppsummeringer/" + oppsummering + ".md", "w") as file:
         file.write(completion.choices[0].message.content)
 
@@ -163,39 +206,23 @@ def srt_til_tekst(filnavn):
         if srt_data[i].startswith(" ") and srt_data[i].endswith("\n"):
             ren_tekst.append(srt_data[i])
 
+    # Sørg for at utdata-mappe eksisterer
+    os.makedirs("./oppsummeringer", exist_ok=True)
+    
     # Skriv for hvert element i ren_tekst skriv en ny linje i en docx-fil
     with open("./oppsummeringer/" + filnavn.split(".")[0] + ".txt", 'w', encoding='utf-8') as f:
         f.write("".join(ren_tekst))
 
-# Sender oppsummering på epost
+# Sender e-post via Logic App
 def send_email(recipient, attachment=None):
-    payload = {
-        "to": [recipient],
-        "from": "Hugin - Transkripsjonsbotten <ikke-svar@huginbotten.no>",
-        "subject": "Transkribering",
-        "text": "Hei! Her er en oppsummering av transkriberingen.",
-        "html": "<b>Hei!</b><p>Her er en oppsummering av transkriberingen.</p>",
-        "attachments": [
-            {
-                "content": attachment,
-                "filename": "transkripsjon.txt",
-                "type": "application/json"
-            }
-        ]
-    }
-
-    headers = {
-        'Accept': '*/*',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0',
-        'x-functions-key': MAIL_API_KEY
-    }
-
-    response = requests.post(MAIL_API_URL, headers=headers, data=json.dumps(payload))
-    print(response)
-
-# ToDo: Send transkribering som chat i teams til innlogget bruker
-def sendTeamsChat(recipient, base64file=None):
+    """Send e-post med transkripsjon via Logic App"""
+    if not LOGIC_APP_CHAT_URL:
+        logger.error("LOGIC_APP_CHAT_URL ikke konfigurert")
+        raise ValueError("LOGIC_APP_CHAT_URL ikke konfigurert")
+    
+    if not recipient:
+        logger.error("Mottaker UPN er påkrevd")
+        raise ValueError("Mottaker UPN er påkrevd")
 
     headers = {
         'Accept': '*/*',
@@ -203,11 +230,90 @@ def sendTeamsChat(recipient, base64file=None):
         'User-Agent': 'Mozilla/5.0'
     }
 
+    # E-post melding med vedlegg
+    email_message = "Takk for at du har brukt transkripsjonstjenesten i Hugin. Vedlagt finner du den fullstendige transkripsjonen av din fil."
+    
     payload = {
         "UPN": recipient,
-        "base64": base64file
+        "message": email_message,
+        "type": "email"  # Indikerer at dette er en e-post forespørsel
+    }
+    
+    # Kun inkluder base64 hvis det faktisk finnes innhold
+    if attachment:
+        payload["base64"] = attachment
+
+    session = create_requests_session()
+    try:
+        logger.info(f"Sender e-post via Logic App til {recipient}")
+        response = session.post(LOGIC_APP_CHAT_URL, headers=headers, data=json.dumps(payload), timeout=30)
+        response.raise_for_status()
+        logger.info(f"E-post sendt til {recipient} (status: {response.status_code})")
+        return response
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Kunne ikke sende e-post til {recipient}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response status: {e.response.status_code}, Response text: {e.response.text[:200]}")
+        raise
+
+# Send transkribering som chat i teams til innlogget bruker
+def sendTeamsChat(recipient, base64file=None):
+    """Send transkripsjon via Teams-chat med retry og timeout"""
+    if not LOGIC_APP_CHAT_URL:
+        logger.error("LOGIC_APP_CHAT_URL ikke konfigurert")
+        raise ValueError("LOGIC_APP_CHAT_URL ikke konfigurert")
+    
+    if not recipient:
+        logger.error("Mottaker UPN er påkrevd")
+        raise ValueError("Mottaker UPN er påkrevd")
+    
+    # Sjekk filstørrelse - Teams har begrensninger på meldingsstørrelse
+    if base64file:
+        # Base64 dekoding for å sjekke faktisk filstørrelse
+        try:
+            import base64
+            decoded_size = len(base64.b64decode(base64file))
+            max_size = 25 * 1024 * 1024  # 25MB grense for Teams
+            
+            if decoded_size > max_size:
+                logger.warning(f"Fil for stor for Teams ({decoded_size/1024/1024:.1f}MB > {max_size/1024/1024}MB). Sender uten vedlegg.")
+                base64file = None
+        except Exception as e:
+            logger.warning(f"Kunne ikke sjekke filstørrelse: {e}")
+            base64file = None
+
+    headers = {
+        'Accept': '*/*',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
     }
 
-    # Send https request til teams
-    req = requests.post(LOGIC_APP_CHAT_URL, headers=headers, data=json.dumps(payload))
-    print(req)    
+    # Enkel statusmelding - ingen transkripsjon i Teams
+    message = "Din transkripsjonsjobb er ferdig! Sjekk e-posten din for å få den fullstendige transkripsjonen."
+    
+    payload = {
+        "UPN": recipient,
+        "message": message,
+        "type": "teams"  # Indikerer at dette er en Teams-melding
+    }
+    
+    # Kun inkluder base64 hvis det faktisk finnes innhold
+    if base64file:
+        payload["base64"] = base64file
+
+    session = create_requests_session()
+    try:
+        if base64file:
+            logger.info(f"Sender Teams-melding med vedlegg til {recipient}")
+        else:
+            logger.info(f"Sender Teams-melding uten vedlegg til {recipient}")
+            
+        response = session.post(LOGIC_APP_CHAT_URL, headers=headers, data=json.dumps(payload), timeout=30)
+        response.raise_for_status()
+        logger.info(f"Teams-melding sendt til {recipient} (status: {response.status_code})")
+        return response
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Kunne ikke sende Teams-melding til {recipient}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response status: {e.response.status_code}, Response text: {e.response.text[:200]}")
+        raise     

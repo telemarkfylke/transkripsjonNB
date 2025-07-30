@@ -3,7 +3,7 @@
 __pycache__/
 *.log
 *.txt
-
+huginlog.txt
 test.py
 
 backup/
@@ -13,5 +13,7 @@ filmer/
 lyd/
 oppsummeringer/
 output/
+hugintranskripsjonv1/
+
 
 
