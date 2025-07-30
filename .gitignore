@@ -41,10 +41,14 @@ env/
 *.txt
 huginlog.txt
 logs/
+!logs/.gitkeep
 *.stderr
 *.stdout
 hello.stdout
 hello.stderr
+
+# Specific log files
+hugintranskripsjonslog.txt
 
 # Working directories (created during runtime)
 blobber/

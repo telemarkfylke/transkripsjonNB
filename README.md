@@ -118,9 +118,10 @@ tail -f logs/transcription.stderr
 ## 📊 Monitoring
 
 **Log files:**
-- `logs/transcription.stdout` - Standard output
-- `logs/transcription.stderr` - Error messages
-- `hugin_transcription.log` - Application logs
+- `logs/hugintranskripsjonslog.txt` - Main application log with detailed flow information
+- `logs/transcription.stdout` - Standard output from scheduled runs
+- `logs/transcription.stderr` - Error messages from scheduled runs
+- `hugin_transcription.log` - Backup application log (for compatibility)
 
 **Service management:**
 ```bash

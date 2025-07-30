@@ -14,12 +14,16 @@ warnings.filterwarnings("ignore")
 
 from lib import hugintranskriptlib as htl
 
+# Sørg for at logs-mappen eksisterer
+os.makedirs("./logs", exist_ok=True)
+
 # Konfigurer logging med riktig format
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('hugin_transcription.log'),
+        logging.FileHandler('./logs/hugintranskripsjonslog.txt', encoding='utf-8'),
+        logging.FileHandler('hugin_transcription.log', encoding='utf-8'),  # Backward compatibility
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -93,86 +97,116 @@ AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 try:
-    logger.info("Starter transkripsjonstjeneste for HuginLokalTranskripsjon")
+    logger.info("=" * 80)
+    logger.info("🚀 STARTER HUGIN TRANSKRIPSJONSTJENESTE")
+    logger.info(f"Tjeneste startet på: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 80)
     
     # Sørg for at påkrevde mapper eksisterer
     os.makedirs("./blobber", exist_ok=True)
     os.makedirs("./ferdig_tekst", exist_ok=True)
     os.makedirs("./oppsummeringer", exist_ok=True)
-    logger.info("Påkrevde mapper opprettet/verifisert")
+    logger.info("✅ Påkrevde mapper opprettet/verifisert (blobber, ferdig_tekst, oppsummeringer)")
     
     # Hent blob-liste
     try:
+        logger.info("🔍 Sjekker Azure Blob Storage for nye filer...")
         filnavn = htl.list_blobs(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME)
-        logger.info(f"Fant {len(filnavn)} filer å behandle")
+        logger.info(f"📁 Fant {len(filnavn)} filer å behandle")
+        if filnavn:
+            logger.info(f"📋 Filer funnet: {', '.join(filnavn)}")
     except Exception as e:
-        logger.error(f"Kunne ikke liste filer: {e}")
+        logger.error(f"❌ Kunne ikke liste filer fra Azure Storage: {e}")
         raise
     
     if not filnavn:
-        logger.info("Ingen filer funnet for behandling")
+        logger.info("ℹ️  Ingen filer funnet for behandling - avslutter")
+        logger.info("=" * 80)
         sys.exit(0)
     
     metadata = []
 
     # Nedlastingsfase - med individuell feilhåndtering
-    for i, filename in enumerate(filnavn):
+    logger.info("⬇️  STARTER NEDLASTINGSFASE")
+    logger.info("-" * 50)
+    
+    for i, filename in enumerate(filnavn, 1):
         try:
             # Rens filnavn
             safe_filename = sanitize_filename(filename)
-            logger.info(f"Behandler fil {i}: {safe_filename}")
+            logger.info(f"📥 [{i}/{len(filnavn)}] Behandler fil: {safe_filename}")
             
             # Hent metadata
+            logger.info(f"📋 Henter metadata for {safe_filename}")
             file_metadata = htl.get_blob_metadata(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filename)
             metadata.append(file_metadata)
             
+            if 'upn' in file_metadata:
+                logger.info(f"👤 Bruker: {file_metadata['upn']}")
+            
             # Last ned blob
             download_path = f"./blobber/{safe_filename}"
+            logger.info(f"⬇️  Laster ned til: {download_path}")
             htl.download_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filename, download_path)
-            logger.info(f"Lastet ned fil {safe_filename}")
+            logger.info(f"✅ Nedlasting fullført: {safe_filename}")
             
             # Slett fra blob-lagring
             htl.delete_blob(AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME, filename)
-            logger.info(f"Slettet fil {safe_filename} fra lagring")
+            logger.info(f"🗑️  Slettet fra Azure Storage: {safe_filename}")
             
         except Exception as e:
-            logger.error(f"Kunne ikke behandle fil {filename}: {e}")
+            logger.error(f"❌ Kunne ikke behandle fil {filename}: {e}")
             continue
 
     # Behandlingsfase - med individuell feilhåndtering
+    logger.info("")
+    logger.info("🔄 STARTER BEHANDLINGSFASE")
+    logger.info("-" * 50)
+    
     successful_files = []
-    for i, filename in enumerate(filnavn):
+    for i, filename in enumerate(filnavn, 1):
         try:
             safe_filename = sanitize_filename(filename)
             file_extension = get_file_extension(safe_filename)
             
+            logger.info(f"🔄 [{i}/{len(filnavn)}] Behandler fil: {safe_filename}")
+            
             if not file_extension:
-                logger.warning(f"Hopper over fil uten filtype: {safe_filename}")
+                logger.warning(f"⚠️  Hopper over fil uten filtype: {safe_filename}")
                 continue
+            
+            logger.info(f"📄 Filtype: {file_extension}")
             
             # Sjekk om filen eksisterer lokalt
             local_file_path = f"./blobber/{safe_filename}"
             if not os.path.exists(local_file_path):
-                logger.error(f"Nedlastet fil ikke funnet: {local_file_path}")
+                logger.error(f"❌ Nedlastet fil ikke funnet: {local_file_path}")
                 continue
             
-            logger.info(f"Behandler fil: {safe_filename}")
+            file_size = os.path.getsize(local_file_path)
+            logger.info(f"📊 Filstørrelse: {file_size/1024/1024:.1f} MB")
             
             # Konverter video til lyd hvis nødvendig
             if file_extension in ["mp4", "mov", "avi"]:
+                logger.info(f"🎬 Video-fil oppdaget - konverterer til lyd...")
                 base_name = safe_filename.rsplit('.', 1)[0]
                 audio_path = f"./blobber/{base_name}.wav"
                 htl.konverter_til_lyd(local_file_path, audio_path)
-                logger.info(f"Konverterte {safe_filename} til lyd")
+                logger.info(f"✅ Video konvertert til lyd: {base_name}.wav")
             
             # Transkriber
+            logger.info(f"🎤 Starter transkripsjon med WhisperX...")
+            start_time = time.time()
             htl.transkriber("./blobber/", safe_filename)
-            logger.info(f"Transkriberte {safe_filename}")
+            end_time = time.time()
+            duration = end_time - start_time
+            logger.info(f"✅ Transkripsjon fullført på {duration:.1f} sekunder")
             
             # Konverter SRT til tekst
             base_name = safe_filename.rsplit('.', 1)[0]
+            logger.info(f"📝 Genererer ren tekst fra SRT-fil...")
             htl.srt_til_tekst(f"{base_name}.srt")
-            logger.info(f"Genererte ren tekst for {safe_filename}")
+            logger.info(f"✅ Ren tekst generert: {base_name}.txt")
             
             # Kod fil til base64
             txt_file_path = f"./ferdig_tekst/{base_name}.txt"
@@ -212,21 +246,25 @@ try:
                     logger.error(f"Kunne ikke opprette DOCX for {safe_filename}: {e}")
             
             # Send e-post med fullstendig transkripsjon som vedlegg
+            logger.info("📧 Forbereder e-post utsendelse...")
             try:
-                if i < len(metadata) and 'upn' in metadata[i]:
+                if i-1 < len(metadata) and 'upn' in metadata[i-1]:
+                    recipient = metadata[i-1]["upn"]
+                    logger.info(f"📧 Sender e-post til: {recipient}")
+                    
                     # Opprett e-post vedlegg fra tekstfil
                     email_attachment = None
                     if os.path.exists(txt_file_path):
                         with open(txt_file_path, "rb") as file:
                             email_attachment = base64.b64encode(file.read()).decode('utf-8')
-                            logger.info(f"Opprettet e-post vedlegg for {safe_filename}")
+                            logger.info(f"📎 E-post vedlegg opprettet ({len(email_attachment)/1024:.1f} KB)")
                     
-                    htl.send_email(metadata[i]["upn"], email_attachment)
-                    logger.info(f"Sendte e-post med transkripsjon for {safe_filename} til {metadata[i]['upn']}")
+                    htl.send_email(recipient, email_attachment)
+                    logger.info(f"✅ E-post sendt med transkripsjon til {recipient}")
                 else:
-                    logger.warning(f"Ingen UPN funnet i metadata for {safe_filename}")
+                    logger.warning(f"⚠️  Ingen bruker (UPN) funnet i metadata for {safe_filename}")
             except Exception as e:
-                logger.error(f"Kunne ikke sende e-post for {safe_filename}: {e}")
+                logger.error(f"❌ Kunne ikke sende e-post for {safe_filename}: {e}")
             
             # Send enkel statusmelding i Teams (kun varsel om ferdig jobb)
             #try:
@@ -239,6 +277,7 @@ try:
             #    logger.error(f"Kunne ikke sende Teams-varsel for {safe_filename}: {e}")
             
             # Rydd opp filer
+            logger.info("🧹 Starter opprydding av midlertidige filer...")
             cleanup_files = [
                 local_file_path,
                 txt_file_path,
@@ -257,22 +296,47 @@ try:
                 if os.path.exists(audio_file_path):
                     cleanup_files.append(audio_file_path)
             
+            cleaned_count = 0
             for file_path in cleanup_files:
                 try:
                     if os.path.exists(file_path):
                         os.remove(file_path)
-                        logger.debug(f"Fjernet fil: {file_path}")
+                        cleaned_count += 1
+                        logger.debug(f"🗑️  Fjernet: {file_path}")
                 except Exception as e:
-                    logger.error(f"Kunne ikke fjerne fil {file_path}: {e}")
+                    logger.error(f"❌ Kunne ikke fjerne fil {file_path}: {e}")
+            
+            logger.info(f"🧹 Opprydding fullført - fjernet {cleaned_count} filer")
             
             successful_files.append(safe_filename)
-            logger.info(f"Behandlet {safe_filename} vellykket")
+            logger.info(f"✅ FIL FULLFØRT: {safe_filename}")
+            logger.info("-" * 30)
             
         except Exception as e:
-            logger.error(f"Kunne ikke behandle fil {filename}: {e}")
+            logger.error(f"❌ FEIL ved behandling av {filename}: {e}")
             continue
     
-    logger.info(f"Transkripsjonsjeneneste fullført. Behandlet {len(successful_files)} filer vellykket")
+    # Avslutning og sammendrag
+    logger.info("")
+    logger.info("🏁 TRANSKRIPSJONSTJENESTE FULLFØRT")
+    logger.info("=" * 80)
+    logger.info(f"📊 SAMMENDRAG:")
+    logger.info(f"   • Totalt filer funnet: {len(filnavn)}")
+    logger.info(f"   • Filer behandlet vellykket: {len(successful_files)}")
+    logger.info(f"   • Filer med feil: {len(filnavn) - len(successful_files)}")
+    
+    if successful_files:
+        logger.info(f"✅ Vellykkede filer: {', '.join(successful_files)}")
+    
+    failed_files = [f for f in filnavn if sanitize_filename(f) not in successful_files]
+    if failed_files:
+        logger.info(f"❌ Feilede filer: {', '.join(failed_files)}")
+    
+    logger.info(f"⏰ Tjeneste avsluttet: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 80)
 
 except Exception as e:
-    logging.exception(f"En feil oppstod i HuginLokalTranskripsjon: {e}")
+    logger.error("💥 KRITISK FEIL I HUGIN TRANSKRIPSJONSTJENESTE")
+    logger.error("=" * 80)
+    logging.exception(f"Kritisk feil oppstod: {e}")
+    logger.error("=" * 80)
