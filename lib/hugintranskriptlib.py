@@ -11,7 +11,10 @@ from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from transformers import pipeline
 from openai import OpenAI
 from docx import Document
-from .transkripsjon_sp_lib import hentToken
+try:
+    from .transkripsjon_sp_lib import hentToken
+except ImportError:
+    from transkripsjon_sp_lib import hentToken
 
 # Ensure ffmpeg is in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
@@ -65,10 +68,7 @@ def delete_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name):
 def konverter_til_lyd(filnavn, nytt_filnavn):
     # Konverterer video til lyd
     print(f'Konverterer {filnavn} til lyd.')
-    stream = ffmpeg.input(filnavn)
-    stream = ffmpeg.output(stream, nytt_filnavn)
-    ffmpeg.input(filnavn).output(nytt_filnavn, acodec='libmp3lame', format='mp3').run()
-    # ffmpeg.run(stream, overwrite_output=True)
+    ffmpeg.input(filnavn).output(nytt_filnavn, acodec='pcm_s16le', format='wav').run(overwrite_output=True)
     print(f'Konvertering ferdig. Lydfilen er lagret som {nytt_filnavn}')
 
 # Transkriber blob og lagrer i SRT-fil

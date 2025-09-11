@@ -186,17 +186,19 @@ try:
             logger.info(f"📊 Filstørrelse: {file_size/1024/1024:.1f} MB")
             
             # Konverter video til lyd hvis nødvendig
+            transcription_filename = safe_filename
             if file_extension in ["mp4", "mov", "avi", "m4a"]:
                 logger.info(f"🎬 Media-fil oppdaget - konverterer til lyd...")
                 base_name = safe_filename.rsplit('.', 1)[0]
                 audio_path = f"./blobber/{base_name}.wav"
                 htl.konverter_til_lyd(local_file_path, audio_path)
-                logger.info(f"✅ Media konvertert til lyd: {base_name}.wav")
+                transcription_filename = f"{base_name}.wav"
+                logger.info(f"✅ Media konvertert til lyd: {transcription_filename}")
             
             # Transkriber
             logger.info(f"🎤 Starter transkripsjon med WhisperX...")
             start_time = time.time()
-            htl.transkriber("./blobber/", safe_filename)
+            htl.transkriber("./blobber/", transcription_filename)
             end_time = time.time()
             duration = end_time - start_time
             logger.info(f"✅ Transkripsjon fullført på {duration:.1f} sekunder")
