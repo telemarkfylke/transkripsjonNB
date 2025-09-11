@@ -258,29 +258,29 @@ try:
                 except Exception as e:
                     logger.error(f"Kunne ikke opprette DOCX for oppsummering {safe_filename}: {e}")
             
-            # Send notifikasjoner med SharePoint nedlastingslenker
-            logger.info("📧 Sender notifikasjoner med SharePoint-lenker...")
+            # Send varsler med SharePoint nedlastingslenker
+            logger.info("📧 Varsler med SharePoint-lenker...")
             try:
                 if i-1 < len(metadata) and 'upn' in metadata[i-1]:
                     recipient = metadata[i-1]["upn"]
-                    logger.info(f"📧 Sender notifikasjoner til: {recipient}")
+                    logger.info(f"📧 Varsler til: {recipient}")
                     
                     # Opprett transcribed_files dict for sendNotification
                     transcribed_files = {
                         'docx': transcribed_docx_path
                     }
                     
-                    # Send notifikasjoner med SharePoint-lenker
+                    # Send varsler med SharePoint-lenker
                     success = htl.sendNotification(recipient, transcribed_files, safe_filename)
                     
                     if success:
-                        logger.info(f"✅ Notifikasjoner med SharePoint-lenker sendt til {recipient}")
+                        logger.info(f"✅ Varsel med SharePoint-lenker sendt til {recipient}")
                     else:
-                        logger.error(f"❌ Kunne ikke sende notifikasjoner til {recipient}")
+                        logger.error(f"❌ Kunne ikke sende varsel til {recipient}")
                 else:
                     logger.warning(f"⚠️  Ingen bruker (UPN) funnet i metadata for {safe_filename}")
             except Exception as e:
-                logger.error(f"❌ Kunne ikke sende notifikasjoner for {safe_filename}: {e}")
+                logger.error(f"❌ Kunne ikke sende varsel for {safe_filename}: {e}")
             
             # Rydd opp filer
             logger.info("🧹 Starter opprydding av midlertidige filer...")

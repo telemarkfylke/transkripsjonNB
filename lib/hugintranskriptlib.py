@@ -232,7 +232,17 @@ def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str)
         if not sharepoint_url:
             logger.error("SharePoint opplasting feilet")
             # Send error notification
-            error_message = "Din transkripsjonsjobb er ferdig, men det oppstod et problem med å laste opp filen til SharePoint. Kontakt support for assistanse."
+            error_message = """Hei,
+
+Din transkripsjonsjobb er ferdig behandlet, men det oppstod et teknisk problem med å laste opp filen til SharePoint.
+
+Vennligst kontakt support for assistanse med å hente din transkriberte fil.
+
+Vi beklager uleiligheten.
+
+Med vennlig hilsen
+Hugin Transkripsjonstjeneste
+Telemark Fylkeskommune"""
             _send_error_notification(upn, error_message)
             return False
         
@@ -240,7 +250,23 @@ def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str)
         logger.info(f"Fil lastet opp med navn: {unique_filename}")
         
         # Create email notification message with download link
-        email_message = f"Takk for at du har brukt transkripsjonstjenesten i Hugin. Din transkripsjon er ferdig og kan lastes ned fra SharePoint: {sharepoint_url}"
+        email_message = f"""Hei,
+
+Din transkripsjonsjobb er nå ferdig behandlet.
+
+Du kan laste ned den transkriberte filen ved å klikke på lenken nedenfor:
+{sharepoint_url}
+
+Filen er lagret trygt i SharePoint og kun du har tilgang til den.
+
+VIKTIG PERSONVERNHENSYN:
+Vær forsiktig med hvordan du bruker transkripsjonen videre i andre tjenester. Dersom transkripsjonen inneholder personopplysninger, må du følge gjeldende personvernregler og kun dele informasjonen med personer som har et tjenstlig behov for den.
+
+Takk for at du bruker transkripsjonstjenesten i Hugin.
+
+Med vennlig hilsen
+Hugin Transkripsjonstjeneste
+Telemark Fylkeskommune"""
 
         # Send email notification using Graph API
         logger.info(f"Sender e-post via Graph API til {upn} med SharePoint URL: {sharepoint_url}")
@@ -257,7 +283,17 @@ def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str)
     except Exception as e:
         logger.error(f"sendNotification feilet for {upn}: {e}")
         # Send error notification as fallback
-        error_message = "Din transkripsjonsjobb er ferdig, men det oppstod et teknisk problem med å laste opp til SharePoint. Kontakt support for assistanse."
+        error_message = """Hei,
+
+Din transkripsjonsjobb er ferdig behandlet, men det oppstod et teknisk problem med å laste opp filen til SharePoint.
+
+Vennligst kontakt support for assistanse med å hente din transkriberte fil.
+
+Vi beklager uleiligheten.
+
+Med vennlig hilsen
+Hugin Transkripsjonstjeneste
+Telemark Fylkeskommune"""
         _send_error_notification(upn, error_message)
         return False
 
