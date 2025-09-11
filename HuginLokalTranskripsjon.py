@@ -187,12 +187,12 @@ try:
             logger.info(f"📊 Filstørrelse: {file_size/1024/1024:.1f} MB")
             
             # Konverter video til lyd hvis nødvendig
-            if file_extension in ["mp4", "mov", "avi"]:
-                logger.info(f"🎬 Video-fil oppdaget - konverterer til lyd...")
+            if file_extension in ["mp4", "mov", "avi", "m4a"]:
+                logger.info(f"🎬 Media-fil oppdaget - konverterer til lyd...")
                 base_name = safe_filename.rsplit('.', 1)[0]
                 audio_path = f"./blobber/{base_name}.wav"
                 htl.konverter_til_lyd(local_file_path, audio_path)
-                logger.info(f"✅ Video konvertert til lyd: {base_name}.wav")
+                logger.info(f"✅ Media konvertert til lyd: {base_name}.wav")
             
             # Transkriber
             logger.info(f"🎤 Starter transkripsjon med WhisperX...")
@@ -230,7 +230,21 @@ try:
                 logger.error(f"Kunne ikke kode {safe_filename} til base64: {e}")
                 base64file = None
             
-            # Opprett docx-fil
+            # Opprett docx-fil fra transkripsjonen
+            transcribed_docx_path = f"./ferdig_tekst/{base_name}.docx"
+            
+            try:
+                with open(txt_file_path, "r", encoding='utf-8') as file:
+                    text = file.read()
+                    doc = Document()
+                    doc.add_paragraph(text)
+                    doc.save(transcribed_docx_path)
+                logger.info(f"✅ Opprettet DOCX-fil for transkripsjon: {base_name}.docx")
+            except Exception as e:
+                logger.error(f"❌ Kunne ikke opprette DOCX for transkripsjon {safe_filename}: {e}")
+                continue
+            
+            # Opprett docx-fil for oppsummering (hvis den eksisterer)
             oppsummering_txt_path = f"./oppsummeringer/{base_name}.txt"
             oppsummering_docx_path = f"./oppsummeringer/{base_name}.docx"
             
@@ -241,46 +255,40 @@ try:
                         doc = Document()
                         doc.add_paragraph(text)
                         doc.save(oppsummering_docx_path)
-                    logger.info(f"Opprettet DOCX-fil for {safe_filename}")
+                    logger.info(f"Opprettet DOCX-fil for oppsummering: {safe_filename}")
                 except Exception as e:
-                    logger.error(f"Kunne ikke opprette DOCX for {safe_filename}: {e}")
+                    logger.error(f"Kunne ikke opprette DOCX for oppsummering {safe_filename}: {e}")
             
-            # Send e-post med fullstendig transkripsjon som vedlegg
-            logger.info("📧 Forbereder e-post utsendelse...")
+            # Send notifikasjoner med SharePoint nedlastingslenker
+            logger.info("📧 Sender notifikasjoner med SharePoint-lenker...")
             try:
                 if i-1 < len(metadata) and 'upn' in metadata[i-1]:
                     recipient = metadata[i-1]["upn"]
-                    logger.info(f"📧 Sender e-post til: {recipient}")
+                    logger.info(f"📧 Sender notifikasjoner til: {recipient}")
                     
-                    # Opprett e-post vedlegg fra tekstfil
-                    email_attachment = None
-                    if os.path.exists(txt_file_path):
-                        with open(txt_file_path, "rb") as file:
-                            email_attachment = base64.b64encode(file.read()).decode('utf-8')
-                            logger.info(f"📎 E-post vedlegg opprettet ({len(email_attachment)/1024:.1f} KB)")
+                    # Opprett transcribed_files dict for sendNotification
+                    transcribed_files = {
+                        'docx': transcribed_docx_path
+                    }
                     
-                    htl.send_email(recipient, email_attachment)
-                    logger.info(f"✅ E-post sendt med transkripsjon til {recipient}")
+                    # Send notifikasjoner med SharePoint-lenker
+                    success = htl.sendNotification(recipient, transcribed_files, safe_filename)
+                    
+                    if success:
+                        logger.info(f"✅ Notifikasjoner med SharePoint-lenker sendt til {recipient}")
+                    else:
+                        logger.error(f"❌ Kunne ikke sende notifikasjoner til {recipient}")
                 else:
                     logger.warning(f"⚠️  Ingen bruker (UPN) funnet i metadata for {safe_filename}")
             except Exception as e:
-                logger.error(f"❌ Kunne ikke sende e-post for {safe_filename}: {e}")
-            
-            # Send enkel statusmelding i Teams (kun varsel om ferdig jobb)
-            #try:
-            #    if i < len(metadata) and 'upn' in metadata[i]:
-            #        response = htl.sendTeamsChat(metadata[i]["upn"], None)  # Alltid uten vedlegg eller transkripsjon
-            #        logger.info(f"Sendte Teams-varsel om ferdig jobb for {safe_filename} til {metadata[i]['upn']}")
-            #    else:
-            #        logger.warning(f"Ingen UPN funnet i metadata for {safe_filename}")
-            #except Exception as e:
-            #    logger.error(f"Kunne ikke sende Teams-varsel for {safe_filename}: {e}")
+                logger.error(f"❌ Kunne ikke sende notifikasjoner for {safe_filename}: {e}")
             
             # Rydd opp filer
             logger.info("🧹 Starter opprydding av midlertidige filer...")
             cleanup_files = [
                 local_file_path,
                 txt_file_path,
+                transcribed_docx_path,
                 oppsummering_txt_path,
                 oppsummering_docx_path
             ]
@@ -291,7 +299,7 @@ try:
                 cleanup_files.append(srt_file_path)
             
             # Rydd opp lydfiler hvis de ble opprettet
-            if file_extension in ["mp4", "mov", "avi"]:
+            if file_extension in ["mp4", "mov", "avi", "m4a"]:
                 audio_file_path = f"./blobber/{base_name}.wav"
                 if os.path.exists(audio_file_path):
                     cleanup_files.append(audio_file_path)

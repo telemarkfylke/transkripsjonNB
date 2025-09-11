@@ -33,7 +33,7 @@ venv/
 ENV/
 env/
 
-# UV
+# UV and pyenv
 .python-version
 
 # Logs and temporary files
@@ -54,6 +54,7 @@ hugintranskripsjonslog.txt
 blobber/
 ferdig_tekst/
 oppsummeringer/
+dokumenter/
 temp/
 tmp/
 
@@ -80,6 +81,9 @@ tmp/
 *~
 .DS_Store
 
+# Claude Code configuration
+CLAUDE.md
+
 # OS generated files
 Thumbs.db
 ehthumbs.db
@@ -104,8 +108,6 @@ dmypy.json
 profile_default/
 ipython_config.py
 
-# pyenv
-.python-version
 
 # LaunchAgent files (user-specific)
 *.plist

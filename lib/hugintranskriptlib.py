@@ -16,6 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import dotenv
+from .transkripsjon_sp_lib import hentToken
 
 dotenv.load_dotenv()
 LOGIC_APP_CHAT_URL = os.getenv("LOGIC_APP_CHAT_URL")
@@ -256,64 +257,254 @@ def send_email(recipient, attachment=None):
             logger.error(f"Response status: {e.response.status_code}, Response text: {e.response.text[:200]}")
         raise
 
-# Send transkribering som chat i teams til innlogget bruker
-def sendTeamsChat(recipient, base64file=None):
-    """Send transkripsjon via Teams-chat med retry og timeout"""
-    if not LOGIC_APP_CHAT_URL:
-        logger.error("LOGIC_APP_CHAT_URL ikke konfigurert")
-        raise ValueError("LOGIC_APP_CHAT_URL ikke konfigurert")
+def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str) -> bool:
+    """
+    Send email notification with SharePoint download link
     
-    if not recipient:
-        logger.error("Mottaker UPN er påkrevd")
-        raise ValueError("Mottaker UPN er påkrevd")
+    Args:
+        upn: User Principal Name (email) of the recipient
+        transcribed_files: Dict with file paths {'docx': 'path/to/file.docx'}
+        original_blob_name: Original blob filename for unique naming
     
-    # Sjekk filstørrelse - Teams har begrensninger på meldingsstørrelse
-    if base64file:
-        # Base64 dekoding for å sjekke faktisk filstørrelse
-        try:
-            import base64
-            decoded_size = len(base64.b64decode(base64file))
-            max_size = 25 * 1024 * 1024  # 25MB grense for Teams
-            
-            if decoded_size > max_size:
-                logger.warning(f"Fil for stor for Teams ({decoded_size/1024/1024:.1f}MB > {max_size/1024/1024}MB). Sender uten vedlegg.")
-                base64file = None
-        except Exception as e:
-            logger.warning(f"Kunne ikke sjekke filstørrelse: {e}")
-            base64file = None
-
-    headers = {
-        'Accept': '*/*',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-
-    # Enkel statusmelding - ingen transkripsjon i Teams
-    message = "Din transkripsjonsjobb er ferdig! Sjekk e-posten din for å få den fullstendige transkripsjonen."
+    Returns:
+        bool: True if email notification sent successfully
+    """
+    if not upn:
+        logger.error("UPN er påkrevd for sendNotification")
+        raise ValueError("UPN er påkrevd")
     
-    payload = {
-        "UPN": recipient,
-        "message": message,
-        "type": "teams"  # Indikerer at dette er en Teams-melding
-    }
+    if not transcribed_files.get('docx'):
+        logger.error("DOCX-fil er påkrevd for sendNotification")
+        raise ValueError("DOCX-fil er påkrevd")
     
-    # Kun inkluder base64 hvis det faktisk finnes innhold
-    if base64file:
-        payload["base64"] = base64file
-
-    session = create_requests_session()
     try:
-        if base64file:
-            logger.info(f"Sender Teams-melding med vedlegg til {recipient}")
+        # Generate unique filename using original blob name + timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = os.path.splitext(original_blob_name)[0]
+        unique_filename = f"{base_filename}_{timestamp}.docx"
+        
+        logger.info(f"Laster opp transkripsjon til SharePoint med navn: {unique_filename}")
+        
+        # Temporarily copy the docx file with unique filename for SharePoint upload
+        docx_file_path = transcribed_files['docx']
+        temp_upload_path = f"./dokumenter/{unique_filename}"  # Use unique filename
+        
+        # Create dokumenter directory if it doesn't exist
+        os.makedirs("./dokumenter", exist_ok=True)
+        
+        # Copy the docx file to the expected path temporarily with unique name
+        import shutil
+        shutil.copy2(docx_file_path, temp_upload_path)
+        
+        # Upload to SharePoint with custom filename
+        sharepoint_url = _upload_to_sharepoint_custom(upn, temp_upload_path)
+        
+        # Clean up temporary file
+        if os.path.exists(temp_upload_path):
+            os.remove(temp_upload_path)
+        
+        if not sharepoint_url:
+            logger.error("SharePoint opplasting feilet")
+            # Send error notification
+            error_message = "Din transkripsjonsjobb er ferdig, men det oppstod et problem med å laste opp filen til SharePoint. Kontakt support for assistanse."
+            _send_error_notification(upn, error_message)
+            return False
+        
+        logger.info(f"SharePoint opplasting vellykket: {sharepoint_url}")
+        logger.info(f"Fil lastet opp med navn: {unique_filename}")
+        
+        # Create email notification message with download link
+        email_message = f"Takk for at du har brukt transkripsjonstjenesten i Hugin. Din transkripsjon er ferdig og kan lastes ned fra SharePoint: {sharepoint_url}"
+
+        # Send email notification using Graph API
+        logger.info(f"Sender e-post via Graph API til {upn} med SharePoint URL: {sharepoint_url}")
+        email_subject = "Transkripsjon ferdig - Hugin"
+        email_success = _send_email_graph(upn, email_subject, email_message)
+        
+        if email_success:
+            logger.info(f"E-post med SharePoint-lenke sendt til {upn}")
         else:
-            logger.info(f"Sender Teams-melding uten vedlegg til {recipient}")
-            
-        response = session.post(LOGIC_APP_CHAT_URL, headers=headers, data=json.dumps(payload), timeout=30)
+            logger.error(f"E-post sending feilet for {upn}")
+        
+        return email_success
+        
+    except Exception as e:
+        logger.error(f"sendNotification feilet for {upn}: {e}")
+        # Send error notification as fallback
+        error_message = "Din transkripsjonsjobb er ferdig, men det oppstod et teknisk problem med å laste opp til SharePoint. Kontakt support for assistanse."
+        _send_error_notification(upn, error_message)
+        return False
+
+def _send_error_notification(upn: str, error_message: str):
+    """Send a simple error notification via email using Graph API"""
+    try:
+        error_subject = "Transkripsjonsfeil - Hugin"
+        success = _send_email_graph(upn, error_subject, error_message)
+        if success:
+            logger.info(f"Feilmelding sendt via e-post til {upn}")
+        else:
+            logger.error(f"Kunne ikke sende feilmelding via e-post til {upn}")
+        
+    except Exception as e:
+        logger.error(f"Kunne ikke sende feilmelding til {upn}: {e}")
+
+def _upload_to_sharepoint_custom(upn: str, file_path: str) -> str:
+    """
+    Custom SharePoint upload function that uses the provided file path and filename
+    Based on the original lastOppTilSP function but with custom file path support
+    """
+    SHAREPOINT_SITE_URL = os.getenv('SHAREPOINT_SITE_URL')
+    DEFAULT_LIBRARY = os.getenv('DEFAULT_LIBRARY', 'Documents')
+    GRAPH_URL = "https://graph.microsoft.com/v1.0"
+    
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        return None
+    
+    try:
+        # Get authentication token
+        token = hentToken()
+        if not token:
+            return None
+        
+        # Get site ID
+        parts = SHAREPOINT_SITE_URL.replace('https://', '').split('/')
+        hostname = parts[0]
+        site_path = '/'.join(parts[1:])
+        
+        headers = {'Authorization': f'Bearer {token}'}
+        url = f"{GRAPH_URL}/sites/{hostname}:/{site_path}"
+        
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
-        logger.info(f"Teams-melding sendt til {recipient} (status: {response.status_code})")
-        return response
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Kunne ikke sende Teams-melding til {recipient}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"Response status: {e.response.status_code}, Response text: {e.response.text[:200]}")
-        raise     
+        site_id = response.json()['id']
+        
+        if not site_id:
+            logger.error("Could not get SharePoint site ID")
+            return None
+        
+        # Get document library
+        drives_url = f"{GRAPH_URL}/sites/{site_id}/drives"
+        drives_response = requests.get(drives_url, headers=headers)
+        drives_response.raise_for_status()
+        
+        # Find the specified document library
+        drives = drives_response.json()['value']
+        drive_id = None
+        for drive in drives:
+            if drive['name'] == DEFAULT_LIBRARY:
+                drive_id = drive['id']
+                break
+        
+        if not drive_id:
+            logger.error(f"Could not find '{DEFAULT_LIBRARY}' document library")
+            return None
+        
+        # Upload file with the exact filename from file_path
+        file_name = os.path.basename(file_path)
+        upload_headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/octet-stream'
+        }
+        
+        upload_url = f"{GRAPH_URL}/sites/{site_id}/drives/{drive_id}/root:/{file_name}:/content"
+        
+        with open(file_path, 'rb') as f:
+            response = requests.put(upload_url, headers=upload_headers, data=f)
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        logger.info(f"Successfully uploaded to SharePoint: {file_name}")
+        
+        # Set exclusive permissions for the specified UPN
+        file_id = result['id']
+        permission_data = {
+            'recipients': [{'email': upn}],
+            'roles': ['read'],
+            'requireSignIn': True,
+            'sendInvitation': False
+        }
+        
+        invite_url = f"{GRAPH_URL}/sites/{site_id}/drives/{drive_id}/items/{file_id}/invite"
+        permission_headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+        invite_response = requests.post(invite_url, headers=permission_headers, json=permission_data)
+        
+        if invite_response.status_code in [200, 201]:
+            logger.info(f"Granted exclusive access to: {upn}")
+        else:
+            logger.warning(f"Permission grant may have failed: {invite_response.status_code}")
+        
+        # Generate a secure sharing link
+        sharing_data = {
+            'type': 'view',
+            'scope': 'users'  # Only users with permissions can access
+        }
+        
+        link_url = f"{GRAPH_URL}/sites/{site_id}/drives/{drive_id}/items/{file_id}/createLink"
+        response = requests.post(link_url, headers=permission_headers, json=sharing_data)
+        
+        if response.status_code in [200, 201]:
+            sharing_link = response.json()['link']['webUrl']
+            logger.info("Secure sharing link created successfully")
+            return sharing_link
+        else:
+            logger.warning(f"Sharing link creation failed: {response.status_code}, using direct URL")
+            return result['webUrl']
+        
+    except Exception as e:
+        logger.error(f"SharePoint upload failed: {e}")
+        return None
+
+
+def _send_email_graph(upn: str, subject: str, message: str) -> bool:
+    """
+    Send email using Microsoft Graph API directly
+    """
+    try:
+        # Get authentication token
+        token = hentToken()
+        if not token:
+            logger.error("Could not get Graph API token for email")
+            return False
+        
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Send email
+        email_payload = {
+            'message': {
+                'subject': subject,
+                'body': {
+                    'contentType': 'Text',
+                    'content': message
+                },
+                'toRecipients': [
+                    {
+                        'emailAddress': {
+                            'address': upn
+                        }
+                    }
+                ]
+            }
+        }
+        
+        # Use application permissions to send mail
+        email_url = f"https://graph.microsoft.com/v1.0/users/{upn}/sendMail"
+        email_response = requests.post(email_url, headers=headers, json=email_payload)
+        
+        if email_response.status_code == 202:
+            logger.info(f"Email sent via Graph API to {upn}")
+            return True
+        else:
+            logger.error(f"Failed to send email via Graph API: {email_response.status_code} - {email_response.text}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to send email via Graph API to {upn}: {e}")
+        return False

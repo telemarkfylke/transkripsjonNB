@@ -1,15 +1,15 @@
 # 🎤 Hugin Transcription Service
 
-An automated Norwegian transcription service using the National Library of Norway's WhisperX model. This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, and delivers results via email and Teams notifications.
+An automated Norwegian transcription service using the National Library of Norway's WhisperX model. This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
 
 ## 🚀 Features
 
 - **Norwegian-optimized transcription** using NbAiLab/nb-whisper-medium
 - **Automated file processing** from Azure Blob Storage
-- **Multi-format support** (MP3, MP4, MOV, AVI, WAV)
-- **Email delivery** with full transcription attachments
-- **Teams notifications** for job completion
-- **Secure file handling** with automatic cleanup
+- **Multi-format support** (MP3, MP4, MOV, AVI, WAV, M4A)
+- **SharePoint integration** with secure file uploads and user-specific permissions
+- **Email delivery** with SharePoint download links via Microsoft Graph API
+- **Secure file handling** with automatic cleanup and unique filenames
 - **Apple Silicon optimization** for M1/M2/M3/M4 Macs
 
 ## 📋 Prerequisites
@@ -17,8 +17,9 @@ An automated Norwegian transcription service using the National Library of Norwa
 - **macOS** (tested on Apple Silicon Macs)
 - **Homebrew** package manager
 - **Azure Blob Storage** account
+- **SharePoint** site for file storage
+- **Microsoft Graph API** application registration
 - **OpenAI API** key
-- **Microsoft Teams/Logic App** integration
 
 ## ⚡ Quick Installation
 
@@ -64,26 +65,48 @@ Create a `.env` file in the project root with:
 AZURE_STORAGE_CONNECTION_STRING=your_azure_connection_string
 AZURE_STORAGE_CONTAINER_NAME=your_container_name
 
+# Microsoft Graph API (for SharePoint and notifications)
+TENANT_ID=your_tenant_id
+CLIENT_ID=your_client_id
+CLIENT_SECRET=your_client_secret
+SHAREPOINT_SITE_URL=your_sharepoint_site_url
+DEFAULT_LIBRARY=Documents
+
 # OpenAI API
 OPENAI_API_KEY=your_openai_api_key
 
-# Teams/Email Integration
+# Legacy Logic App (optional fallback)
 LOGIC_APP_CHAT_URL=your_logic_app_webhook_url
 ```
+
+### Microsoft Graph API Permissions
+
+Configure your Azure App Registration with these **Application permissions**:
+
+#### Currently Working:
+- `Sites.ReadWrite.All` - Read/write SharePoint sites and libraries
+- `Files.ReadWrite.All` - Read/write files in SharePoint
+
+#### Required for Email (Add these permissions):
+- `Mail.Send` - Send emails on behalf of users
 
 ## 🔄 How It Works
 
 1. **File Upload**: Users upload audio/video files to Azure Blob Storage with metadata
-2. **Detection**: Service checks for new files every 10 minutes
+2. **Detection**: Service checks for new files every 30 minutes
 3. **Download**: Files are securely downloaded to temporary storage
 4. **Processing**: 
-   - Video files converted to audio (ffmpeg)
+   - Video files and M4A audio converted to WAV format (ffmpeg)
    - Audio transcribed using Norwegian WhisperX model
    - Text cleaned and formatted
-5. **Delivery**: 
-   - Full transcription sent via email
-   - Teams notification sent to user
-6. **Cleanup**: All temporary files automatically deleted
+   - Transcription converted to DOCX format
+5. **SharePoint Upload**:
+   - Transcribed files uploaded to SharePoint as DOCX documents with unique names (filename_timestamp.docx)
+   - User-specific permissions applied (only requesting user can access)
+   - Secure sharing links generated
+6. **Delivery**: 
+   - Email sent with SharePoint download link (via Microsoft Graph API)
+7. **Cleanup**: All temporary files automatically deleted
 
 ## 🧪 Testing
 
@@ -100,10 +123,6 @@ source .venv/bin/activate
 python HuginLokalTranskripsjon.py
 ```
 
-**Test Teams integration:**
-```bash
-python test.py
-```
 
 **Check scheduled service:**
 ```bash
@@ -140,11 +159,15 @@ launchctl list | grep hugin-transcription
 ```
 ├── HuginLokalTranskripsjon.py    # Main orchestrator
 ├── lib/
-│   └── hugintranskriptlib.py     # Core functions library
+│   ├── hugintranskriptlib.py     # Core functions library
+│   └── transkripsjon_sp_lib.py   # SharePoint/Graph API library
+├── test_notification.py          # Test email notification system
+├── test_graph_api.py             # Test Graph API email function
 ├── .venv/                        # UV virtual environment
 ├── blobber/                      # Temporary downloads
 ├── ferdig_tekst/                 # Processed transcriptions
 ├── oppsummeringer/               # AI summaries
+├── dokumenter/                   # Temporary SharePoint uploads
 └── logs/                         # Service logs
 ```
 
@@ -153,8 +176,10 @@ launchctl list | grep hugin-transcription
 - Input sanitization prevents path traversal attacks
 - Environment variables for sensitive data
 - Automatic cleanup of temporary files
-- File size limits for attachments
-- Secure Azure SDK integration
+- SharePoint files have exclusive user permissions (only requesting UPN can access)
+- Secure sharing links with user-specific access
+- Microsoft Graph API authentication using application credentials
+- Unique filenames prevent collisions and enhance security
 
 ## 🛠️ Development
 
@@ -179,6 +204,7 @@ flake8 .
 **Core:**
 - WhisperX (transformers, torch)
 - Azure Blob Storage SDK
+- Microsoft Graph API SDK (requests)
 - OpenAI API client
 - ffmpeg for audio conversion
 
