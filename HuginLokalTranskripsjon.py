@@ -4,12 +4,12 @@ import time
 import base64
 import logging
 import re
+import warnings
+import dotenv
 from openai import OpenAI
 from docx import Document
-import dotenv
 
 # Ignorer advarsler
-import warnings
 warnings.filterwarnings("ignore")
 
 from lib import hugintranskriptlib as htl
@@ -38,8 +38,7 @@ def validate_environment():
     required_vars = [
         "AZURE_STORAGE_CONNECTION_STRING",
         "AZURE_STORAGE_CONTAINER_NAME", 
-        "OPENAI_API_KEY",
-        "LOGIC_APP_CHAT_URL"
+        "OPENAI_API_KEY"
     ]
     
     missing_vars = []

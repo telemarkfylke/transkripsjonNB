@@ -6,8 +6,8 @@ Library with functions for SharePoint operations using Microsoft Graph API
 
 import os
 import requests
-from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from typing import Optional, Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -131,89 +131,3 @@ def _lagDelingslenke(token: str, site_id: str, drive_id: str, file_id: str) -> O
         return None
 
 
-def lastOppTilSP(upn: str) -> Optional[str]:
-    """
-    Upload Faktura_HF_August.pdf to SharePoint document library defined in .env.
-    Set exclusive permissions so only the specified UPN can access the file.
-    
-    Args:
-        upn: User Principal Name (email) that should have exclusive access to the file
-    
-    Returns:
-        str: SharePoint URL of uploaded file if successful, None if failed
-    """
-    file_path = "./dokumenter/Mistral.pdf"
-    
-    # Check if file exists
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return None
-    
-    try:
-        # Get authentication token
-        token = hentToken()
-        if not token:
-            return None
-        
-        # Get site ID
-        site_id = _hentSiteId(token)
-        if not site_id:
-            return None
-        
-        # Get transkripsjoner document library
-        headers = {'Authorization': f'Bearer {token}'}
-        drives_url = f"{GRAPH_URL}/sites/{site_id}/drives"
-        drives_response = requests.get(drives_url, headers=headers)
-        drives_response.raise_for_status()
-        
-        # Find the specified document library
-        drives = drives_response.json()['value']
-        drive_id = None
-        for drive in drives:
-            if drive['name'] == DEFAULT_LIBRARY:
-                drive_id = drive['id']
-                break
-        
-        if not drive_id:
-            print(f"❌ Could not find '{DEFAULT_LIBRARY}' document library")
-            return None
-        
-        # Upload file
-        file_name = os.path.basename(file_path)
-        upload_headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/octet-stream'
-        }
-        
-        upload_url = f"{GRAPH_URL}/sites/{site_id}/drives/{drive_id}/root:/{file_name}:/content"
-        
-        with open(file_path, 'rb') as f:
-            response = requests.put(upload_url, headers=upload_headers, data=f)
-        
-        response.raise_for_status()
-        result = response.json()
-        
-        print(f"✅ Uploaded: {file_name}")
-        
-        # Set exclusive permissions for the specified UPN
-        file_id = result['id']
-        success = _settTilganger(token, site_id, drive_id, file_id, upn)
-        
-        if success:
-            print(f"✅ Granted exclusive access to: {upn}")
-        else:
-            print(f"⚠️ File uploaded but permission setting may have failed")
-        
-        # Generate a secure sharing link
-        sharing_link = _lagDelingslenke(token, site_id, drive_id, file_id)
-        
-        if sharing_link:
-            print(f"🔗 Secure sharing link created")
-            return sharing_link
-        else:
-            print("⚠️ Using direct file URL (may have broader access)")
-            return result['webUrl']
-        
-    except Exception as e:
-        print(f"❌ Upload failed: {e}")
-        return None

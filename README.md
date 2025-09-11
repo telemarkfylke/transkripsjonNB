@@ -74,9 +74,6 @@ DEFAULT_LIBRARY=Documents
 
 # OpenAI API
 OPENAI_API_KEY=your_openai_api_key
-
-# Legacy Logic App (optional fallback)
-LOGIC_APP_CHAT_URL=your_logic_app_webhook_url
 ```
 
 ### Microsoft Graph API Permissions

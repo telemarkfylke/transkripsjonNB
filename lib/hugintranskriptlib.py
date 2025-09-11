@@ -1,59 +1,27 @@
 import os
 import logging
 import time
+import json
+import warnings
+import dotenv
+import requests
+import ffmpeg
+from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+from transformers import pipeline
+from openai import OpenAI
+from docx import Document
+from .transkripsjon_sp_lib import hentToken
 
 # Ensure ffmpeg is in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
 
-import ffmpeg
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
-from transformers import pipeline
-import json
-from datetime import datetime, timedelta
-from openai import OpenAI
-from docx import Document
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-import dotenv
-from .transkripsjon_sp_lib import hentToken
-
 dotenv.load_dotenv()
-LOGIC_APP_CHAT_URL = os.getenv("LOGIC_APP_CHAT_URL")
-
-import warnings
 warnings.filterwarnings("ignore")
 
 # Konfigurer logging
 logger = logging.getLogger(__name__)
 
-def create_requests_session():
-    """Opprett en requests session med retry-strategi og timeout"""
-    session = requests.Session()
-    
-    # Bruk riktig parameter navn for kompatibilitet med nye urllib3 versjoner
-    try:
-        # Prøv først nye parameter navn (urllib3 >=1.26)
-        retry_strategy = Retry(
-            total=3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "POST", "DELETE"],
-            backoff_factor=1
-        )
-    except TypeError:
-        # Fall tilbake til gamle parameter navn (urllib3 <1.26)
-        retry_strategy = Retry(
-            total=3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            method_whitelist=["HEAD", "GET", "POST", "DELETE"],
-            backoff_factor=1
-        )
-    
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    
-    return session
 
 # Funksjoner
 def download_blob(AZURE_STORAGE_CONNECTION_STRING, container_name, blob_name, download_file_path):
@@ -214,48 +182,6 @@ def srt_til_tekst(filnavn):
     with open("./oppsummeringer/" + filnavn.split(".")[0] + ".txt", 'w', encoding='utf-8') as f:
         f.write("".join(ren_tekst))
 
-# Sender e-post via Logic App
-def send_email(recipient, attachment=None):
-    """Send e-post med transkripsjon via Logic App"""
-    if not LOGIC_APP_CHAT_URL:
-        logger.error("LOGIC_APP_CHAT_URL ikke konfigurert")
-        raise ValueError("LOGIC_APP_CHAT_URL ikke konfigurert")
-    
-    if not recipient:
-        logger.error("Mottaker UPN er påkrevd")
-        raise ValueError("Mottaker UPN er påkrevd")
-
-    headers = {
-        'Accept': '*/*',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-
-    # E-post melding med vedlegg
-    email_message = "Takk for at du har brukt transkripsjonstjenesten i Hugin. Vedlagt finner du den fullstendige transkripsjonen av din fil."
-    
-    payload = {
-        "UPN": recipient,
-        "message": email_message,
-        "type": "email"  # Indikerer at dette er en e-post forespørsel
-    }
-    
-    # Kun inkluder base64 hvis det faktisk finnes innhold
-    if attachment:
-        payload["base64"] = attachment
-
-    session = create_requests_session()
-    try:
-        logger.info(f"Sender e-post via Logic App til {recipient}")
-        response = session.post(LOGIC_APP_CHAT_URL, headers=headers, data=json.dumps(payload), timeout=30)
-        response.raise_for_status()
-        logger.info(f"E-post sendt til {recipient} (status: {response.status_code})")
-        return response
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Kunne ikke sende e-post til {recipient}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"Response status: {e.response.status_code}, Response text: {e.response.text[:200]}")
-        raise
 
 def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str) -> bool:
     """
@@ -351,7 +277,7 @@ def _send_error_notification(upn: str, error_message: str):
 def _upload_to_sharepoint_custom(upn: str, file_path: str) -> str:
     """
     Custom SharePoint upload function that uses the provided file path and filename
-    Based on the original lastOppTilSP function but with custom file path support
+    Upload files to SharePoint with custom file path support
     """
     SHAREPOINT_SITE_URL = os.getenv('SHAREPOINT_SITE_URL')
     DEFAULT_LIBRARY = os.getenv('DEFAULT_LIBRARY', 'Documents')
