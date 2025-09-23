@@ -117,3 +117,4 @@ ipython_config.py
 .cache/
 .huggingface/
 transformers_cache/
+nb-whisper-medium-mlx/
