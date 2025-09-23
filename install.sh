@@ -122,16 +122,16 @@ else
     print_status ".env file found"
 fi
 
-# Download and cache the WhisperX model
-echo -e "${BLUE}🤖 Downloading WhisperX model (this may take a while)...${NC}"
+# Download and cache the MLX Whisper model
+echo -e "${BLUE}🤖 Downloading MLX Whisper model (this may take a while)...${NC}"
 .venv/bin/python -c "
 import os
-os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
-from transformers import pipeline
-print('Loading NbAiLab/nb-whisper-medium model...')
-asr = pipeline('automatic-speech-recognition', 'NbAiLab/nb-whisper-medium', device='mps')
-print('Model downloaded and cached successfully!')
-" || print_warning "Model download failed, will be downloaded on first run"
+import mlx_whisper
+print('Loading NbAiLab/nb-whisper-medium-mlx model...')
+# This will download and cache the model if not present
+result = mlx_whisper.load_model('nb-whisper-medium-mlx')
+print('MLX model downloaded and cached successfully!')
+" || print_warning "MLX model download failed, will be downloaded on first run"
 
 # Validate installation
 echo -e "${BLUE}🔍 Validating installation...${NC}"

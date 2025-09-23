@@ -1,10 +1,10 @@
 # 🎤 Hugin Transcription Service
 
-An automated Norwegian transcription service using the National Library of Norway's WhisperX model. This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
+An automated Norwegian transcription service using the National Library of Norway's MLX Whisper model optimized for Apple Silicon. This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
 
 ## 🚀 Features
 
-- **Norwegian-optimized transcription** using NbAiLab/nb-whisper-medium
+- **Norwegian-optimized transcription** using NbAiLab/nb-whisper-medium-mlx with Apple Silicon GPU acceleration
 - **Automated file processing** from Azure Blob Storage
 - **Multi-format support** (MP3, MP4, MOV, AVI, WAV, M4A)
 - **SharePoint integration** with secure file uploads and user-specific permissions
@@ -39,7 +39,7 @@ An automated Norwegian transcription service using the National Library of Norwa
    - Install system dependencies (ffmpeg)
    - Create Python virtual environment
    - Install all Python dependencies
-   - Download and cache the WhisperX model
+   - Download and cache the MLX Whisper model
    - Set up directory structure
    - Create scheduled task configuration
 
@@ -94,7 +94,7 @@ Configure your Azure App Registration with these **Application permissions**:
 3. **Download**: Files are securely downloaded to temporary storage
 4. **Processing**: 
    - Video files and M4A audio converted to WAV format (ffmpeg)
-   - Audio transcribed using Norwegian WhisperX model
+   - Audio transcribed using Norwegian MLX Whisper model with Apple Silicon GPU acceleration
    - Text cleaned and formatted
    - Transcription converted to DOCX format
 5. **SharePoint Upload**:
@@ -199,7 +199,7 @@ flake8 .
 ## 📚 Dependencies
 
 **Core:**
-- WhisperX (transformers, torch)
+- MLX Whisper (Apple Silicon GPU accelerated)
 - Azure Blob Storage SDK
 - Microsoft Graph API SDK (requests)
 - OpenAI API client

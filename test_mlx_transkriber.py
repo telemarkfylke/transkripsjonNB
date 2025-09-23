@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script for the MLX-based transkriber function
-Tests only the improved transkriber function with audio_king.mp3
+Tests only the improved function with audio_king.mp3
 """
 
 import os
@@ -22,7 +22,7 @@ def test_mlx_transkriber():
     print("=" * 50)
 
     # Test file paths
-    test_file = "kurs_00.mp3"
+    test_file = "audio_king.mp3"
     test_path = "./testfiles/"
 
     # Check if test file exists
@@ -68,7 +68,7 @@ def test_mlx_transkriber():
                 srt_content = f.read()
                 print(f"   📏 SRT file size: {len(srt_content)} characters")
         else:
-            print(f"❌ SRT file not found: {srt_file}")
+            print(f"ℹ️  SRT file not created (word_timestamps=False by default): {srt_file}")
 
         if os.path.exists(txt_file):
             print(f"✅ TXT file created: {txt_file}")
@@ -94,16 +94,55 @@ def test_mlx_transkriber():
         traceback.print_exc()
         return False
 
+def test_with_timestamps():
+    """Test the function with word_timestamps=True"""
+    print("\n" + "=" * 60)
+    print("🎯 Testing with word_timestamps=True")
+    print("=" * 60)
+
+    test_file = "audio_king.mp3"
+    test_path = "./testfiles/"
+
+    try:
+        print("🚀 Starting MLX transcription with timestamps...")
+        transkriber(test_path, test_file, word_timestamps=True)
+
+        # Check if SRT was created
+        base_name = test_file.split('.')[0]
+        srt_file = f"./ferdig_tekst/{base_name}.srt"
+
+        if os.path.exists(srt_file):
+            print(f"✅ SRT file with timestamps created: {srt_file}")
+            with open(srt_file, 'r', encoding='utf-8') as f:
+                srt_content = f.read()
+                print(f"   📏 SRT file size: {len(srt_content)} characters")
+                print("\n📝 SRT preview (first 300 characters):")
+                print("-" * 40)
+                print(srt_content[:300].strip())
+                if len(srt_content) > 300:
+                    print("...")
+                print("-" * 40)
+
+        return True
+    except Exception as e:
+        print(f"❌ Error during timestamp transcription: {e}")
+        return False
+
 if __name__ == "__main__":
     print("Starting MLX transkriber test...")
     print()
 
-    success = test_mlx_transkriber()
+    # Test default behavior (fast, no SRT)
+    success1 = test_mlx_transkriber()
 
-    print()
-    if success:
-        print("🎉 Test completed successfully!")
+    # Test with timestamps (slower, creates SRT)
+    success2 = test_with_timestamps()
+
+    print("\n" + "=" * 60)
+    if success1 and success2:
+        print("🎉 All tests completed successfully!")
     else:
-        print("💥 Test failed!")
+        print("💥 Some tests failed!")
+    print("=" * 60)
 
-    sys.exit(0 if success else 1)
+    sys.exit(0 if success1 and success2 else 1)

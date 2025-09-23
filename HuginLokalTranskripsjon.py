@@ -196,18 +196,22 @@ try:
                 logger.info(f"✅ Media konvertert til lyd: {transcription_filename}")
             
             # Transkriber
-            logger.info(f"🎤 Starter transkripsjon med WhisperX...")
+            logger.info(f"🎤 Starter transkripsjon med MLX...")
             start_time = time.time()
             htl.transkriber("./blobber/", transcription_filename)
             end_time = time.time()
             duration = end_time - start_time
             logger.info(f"✅ Transkripsjon fullført på {duration:.1f} sekunder")
-            
-            # Konverter SRT til tekst
+
+            # Konverter SRT til tekst kun hvis SRT-fil eksisterer
             base_name = safe_filename.rsplit('.', 1)[0]
-            logger.info(f"📝 Genererer ren tekst fra SRT-fil...")
-            htl.srt_til_tekst(f"{base_name}.srt")
-            logger.info(f"✅ Ren tekst generert: {base_name}.txt")
+            srt_file_path = f"./ferdig_tekst/{base_name}.srt"
+            if os.path.exists(srt_file_path):
+                logger.info(f"📝 Genererer ren tekst fra SRT-fil...")
+                htl.srt_til_tekst(f"{base_name}.srt")
+                logger.info(f"✅ Ren tekst generert: {base_name}.txt")
+            else:
+                logger.info(f"ℹ️  Hopper over SRT-til-tekst konvertering (ingen SRT-fil opprettet)")
             
             # Kod fil til base64
             txt_file_path = f"./ferdig_tekst/{base_name}.txt"
@@ -294,7 +298,7 @@ try:
                 oppsummering_docx_path
             ]
             
-            # Rydd også opp SRT-filer
+            # Rydd også opp SRT-filer hvis de eksisterer
             srt_file_path = f"./ferdig_tekst/{base_name}.srt"
             if os.path.exists(srt_file_path):
                 cleanup_files.append(srt_file_path)

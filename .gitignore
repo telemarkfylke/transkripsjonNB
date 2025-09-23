@@ -25,6 +25,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.pyc
+*.pyo
+*.pyd
 
 # Virtual environments
 .venv/
@@ -81,8 +84,8 @@ tmp/
 *~
 .DS_Store
 
-# Claude Code configuration
-CLAUDE.md
+# Project-specific files
+hugin_transcription.log
 
 # OS generated files
 Thumbs.db

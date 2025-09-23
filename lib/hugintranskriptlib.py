@@ -11,6 +11,8 @@ from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from transformers import pipeline
 from openai import OpenAI
 from docx import Document
+import mlx.core as mx
+import mlx_whisper
 try:
     from .transkripsjon_sp_lib import hentToken
 except ImportError:
@@ -72,47 +74,98 @@ def konverter_til_lyd(filnavn, nytt_filnavn):
     print(f'Konvertering ferdig. Lydfilen er lagret som {nytt_filnavn}')
 
 # Transkriber blob og lagrer i SRT-fil
-def transkriber(sti, filnavn):
-     # Laster inn KI-modellen fra Huggingface
-        asr = pipeline("automatic-speech-recognition", "NbAiLab/nb-whisper-medium", device="mps") # Sett device='cuda' eller device='cpu' om ønskelig
-
-        # Transkriberer lydfilen til tekst i JSON-format
+def transkriber(sti, filnavn, word_timestamps=False):
         print(f'Transkriberer lyd fra {filnavn} til tekst. Obs: Dette er en tidkrevende prosess.')
-        json_tekst = asr(sti + filnavn, chunk_length_s=28, return_timestamps=True, generate_kwargs={'language': 'no'})
+        print(f"🇳🇴 MLX Norwegian (Apple Silicon GPU)")
+        print("=" * 50)
 
-        # Laster inn JSON-dataen
-        data = json_tekst
-        srt_data = []
-        tekst_data = []
- 
-        # Looper over JSON-rådataen og formaterer den til SRT- og tekst-format
-        for i, item in enumerate(data["chunks"], start=1):
-            start_time = datetime.fromtimestamp(item['timestamp'][0]) - timedelta(hours=1)
-            end_time = datetime.fromtimestamp(item['timestamp'][1]) - timedelta(hours=1) if item['timestamp'][1] is not None else start_time
+        device = mx.default_device()
+        print(f"MLX Device: {device}")
 
-            start_time_str = start_time.strftime('%H:%M:%S,%f')[:-3]
-            end_time_str = end_time.strftime('%H:%M:%S,%f')[:-3]
+        start_time = time.time()
 
-            # Lager SRT-strengen og legger den til i listen
-            srt_string = f"{i}\n{start_time_str} --> {end_time_str}\n{item['text']}\n"
-            srt_data.append(srt_string)
+        # Transkriberer lydfilen med MLX Norwegian model
+        audio_path = sti + filnavn
 
-            # Lager tekststrengen og legger den til i listen
-            tekst_data.append(f"{item['text']}\n")
+        # Use local nb-whisper-medium-mlx model
+        model_path = "./nb-whisper-medium-mlx"
+        if not os.path.exists(os.path.join(model_path, "config.json")):
+            print(f"❌ Local MLX model not found at {model_path}")
+            raise FileNotFoundError(f"Required MLX model not found at {model_path}")
+
+        print(f"✅ Using local Norwegian MLX model: {model_path}")
+
+        transcribe_params = {
+            "path_or_hf_repo": model_path,
+            "language": "no",
+            "verbose": False,
+            "temperature": 0.0
+        }
+
+        # Only add word_timestamps if True (for performance)
+        if word_timestamps:
+            transcribe_params["word_timestamps"] = True
+
+        print("Transcribing with Norwegian MLX model...")
+        transcribe_start = time.time()
+        result = mlx_whisper.transcribe(audio_path, **transcribe_params)
+        transcribe_time = time.time() - transcribe_start
+
+        total_time = time.time() - start_time
+        print(f"Transcription completed in {transcribe_time:.2f} seconds")
 
         # Sørg for at utdata-mappe eksisterer
         os.makedirs("./ferdig_tekst", exist_ok=True)
-        
-        # Skriver til SRT-fil
-        with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.srt", 'w', encoding='utf-8') as f:
-            f.write('\n'.join(srt_data))
-        
-        # Skriver til tekstfil
-        with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.txt", 'w', encoding='utf-8') as f:
-            f.write('\n'.join(tekst_data))
-        
 
-        print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn.split(".")[0]}.srt og .txt')
+        # Always create text file
+        full_text = result.get('text', '')
+        tekst_data = [f"{full_text}\n"] if full_text else []
+
+        with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.txt", 'w', encoding='utf-8') as f:
+            f.write(''.join(tekst_data))
+
+        # Only create SRT file if word_timestamps is True
+        if word_timestamps:
+            srt_data = []
+
+            if 'segments' in result and result['segments']:
+                # Use segments with timestamps
+                for i, segment in enumerate(result['segments'], start=1):
+                    start_time_ts = segment.get('start', 0.0)
+                    end_time_ts = segment.get('end', start_time_ts + 1.0)
+                    text = segment.get('text', '').strip()
+
+                    if text:
+                        # Convert timestamps to datetime objects (subtract 1 hour as in original)
+                        start_time = datetime.fromtimestamp(start_time_ts) - timedelta(hours=1)
+                        end_time = datetime.fromtimestamp(end_time_ts) - timedelta(hours=1)
+
+                        start_time_str = start_time.strftime('%H:%M:%S,%f')[:-3]
+                        end_time_str = end_time.strftime('%H:%M:%S,%f')[:-3]
+
+                        # Create SRT string
+                        srt_string = f"{i}\n{start_time_str} --> {end_time_str}\n{text}\n"
+                        srt_data.append(srt_string)
+            else:
+                # Fallback: use full text without timestamps if segments are not available
+                if full_text:
+                    # Create a single segment for the entire text
+                    start_time = datetime.fromtimestamp(0) - timedelta(hours=1)
+                    end_time = datetime.fromtimestamp(60) - timedelta(hours=1)  # Default 1 minute
+
+                    start_time_str = start_time.strftime('%H:%M:%S,%f')[:-3]
+                    end_time_str = end_time.strftime('%H:%M:%S,%f')[:-3]
+
+                    srt_string = f"1\n{start_time_str} --> {end_time_str}\n{full_text}\n"
+                    srt_data.append(srt_string)
+
+            # Skriver til SRT-fil
+            with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.srt", 'w', encoding='utf-8') as f:
+                f.write('\n'.join(srt_data))
+
+            print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn.split(".")[0]}.srt og .txt')
+        else:
+            print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn.split(".")[0]}.txt')
 
 # Lag oppsummeringer
 def oppsummering(sti, filnavn, språk, format):
