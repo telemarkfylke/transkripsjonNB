@@ -1,6 +1,6 @@
 # 🎤 Hugin Transcription Service
 
-An automated Norwegian transcription service using the National Library of Norway's MLX Whisper model optimized for Apple Silicon. This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
+An automated Norwegian transcription service customized for use in Telemark Fylkeskommune. The service is using the [National Library of Norway's Whisper model](https://huggingface.co/NbAiLab/nb-whisper-medium) optimized for Apple Silicon (MLX). This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
 
 ## 🚀 Features
 
@@ -215,4 +215,4 @@ flake8 .
 
 ---
 
-*Developed by Telemark Fylkeskommune for automated transcription services.*
+**❤️ Produdly Developed by Telemark Fylkeskommune - CC BY SA - 2025 ❤️**
