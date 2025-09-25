@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a Norwegian transcription service that uses MLX Whisper from the National Library of Norway (NbAiLab/nb-whisper-medium-mlx) to transcribe audio and video files. The system integrates with Azure Blob Storage for file management, SharePoint for secure file sharing, and Microsoft Graph API for email notifications. Files are converted to DOCX format for delivery.
+This is a Norwegian transcription service that uses MLX Whisper from the National Library of Norway (NbAiLab/nb-whisper-medium-mlx) to transcribe audio and video files. The system integrates with Azure Blob Storage for file management, SharePoint for secure file sharing, and Microsoft Graph API for email notifications. Additionally, it provides AI-powered meeting summaries using Ollama for generating structured meeting abstracts. Files are converted to DOCX format for delivery.
 
 ## Architecture
 
 ### Core Components
 
 - **HuginLokalTranskripsjon.py**: Main orchestrator script that processes files from Azure Blob Storage
-- **lib/hugintranskriptlib.py**: Core library containing all transcription, file handling, SharePoint integration, and communication functions
+- **lib/hugintranskriptlib.py**: Core library containing all transcription, AI summarization, file handling, SharePoint integration, and communication functions
 - **lib/transkripsjon_sp_lib.py**: SharePoint library for Microsoft Graph API operations
+- **lib/ai_tools.py**: AI summarization library with Ollama integration for generating meeting abstracts
 
 ### Data Flow
 
@@ -20,18 +21,19 @@ This is a Norwegian transcription service that uses MLX Whisper from the Nationa
 2. Main script periodically checks for new files (every 30 minutes via launchctl)
 3. Files are downloaded, transcribed using MLX Whisper, and processed
 4. Video files (MP4, MOV, AVI) and M4A audio files are converted to WAV format using ffmpeg
-5. Transcriptions are converted to DOCX format using python-docx
-6. DOCX files are uploaded to SharePoint with unique names and user-specific permissions
-7. Secure SharePoint download links are generated
-8. Email notifications sent with SharePoint download links via Microsoft Graph API
-9. All temporary files are cleaned up
+5. AI-powered meeting summaries are generated using Ollama (if available)
+6. Transcriptions and summaries are converted to DOCX format using python-docx
+7. Both transcription and summary DOCX files are uploaded to SharePoint with unique names and user-specific permissions
+8. Secure SharePoint download links are generated for both files
+9. Email notifications sent with both SharePoint download links via Microsoft Graph API
+10. All temporary files are cleaned up
 
 ### Key Dependencies
 
 - **MLX Whisper**: For speech-to-text transcription using NbAiLab/nb-whisper-medium-mlx with Apple Silicon GPU acceleration
+- **Ollama**: For AI-powered meeting summarization using local language models (default: gpt-oss:20b)
 - **Azure SDK**: For blob storage operations
 - **Microsoft Graph API**: For SharePoint file operations and email sending
-- **OpenAI API**: For generating summaries and meeting notes
 - **ffmpeg**: For audio/video conversion
 - **python-docx**: For creating Word documents
 
@@ -52,8 +54,10 @@ CLIENT_SECRET=your_client_secret
 SHAREPOINT_SITE_URL=your_sharepoint_site_url
 DEFAULT_LIBRARY=Documents
 
-# OpenAI API
-OPENAI_API_KEY=your_openai_key
+
+# Ollama Configuration (optional - for AI summarization)
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_ENDPOINT=http://localhost:11434
 
 ```
 
@@ -67,6 +71,7 @@ OPENAI_API_KEY=your_openai_key
 
 - ffmpeg installed via Homebrew: `/opt/homebrew/bin`
 - MLX Whisper from https://github.com/ml-explore/mlx-examples/tree/main/whisper
+- Ollama service running locally with the required model (default: gpt-oss:20b)
 
 ## Running the Application
 
@@ -101,7 +106,8 @@ python HuginLokalTranskripsjon.py
 ├── HuginLokalTranskripsjon.py    # Main application
 ├── lib/
 │   ├── hugintranskriptlib.py     # Core functions library
-│   └── transkripsjon_sp_lib.py   # SharePoint/Graph API library
+│   ├── transkripsjon_sp_lib.py   # SharePoint/Graph API library
+│   └── ai_tools.py               # AI summarization library (Ollama integration)
 ├── testfiles/                    # Test files directory (see README for samples)
 ├── com.tfk.hugin-transcription.plist.example  # LaunchAgent configuration
 ├── blobber/                      # Temporary download directory
@@ -124,7 +130,7 @@ python HuginLokalTranskripsjon.py
 
 ### Core Transcription Functions
 - `transkriber()`: Main transcription using NbAiLab MLX Whisper model with Apple Silicon GPU acceleration
-- `oppsummering()`: AI-powered meeting summaries using OpenAI GPT-4
+- `create_ai_summary()`: Generate AI-powered meeting summaries using Ollama
 - `konverter_til_lyd()`: Convert video files and M4A audio to WAV format using ffmpeg
 
 ### Azure Blob Storage Operations
@@ -133,11 +139,19 @@ python HuginLokalTranskripsjon.py
 - `delete_blob()`: Remove processed files from Azure storage
 - `get_blob_metadata()`: Extract user metadata from blobs
 
-### SharePoint and Notifications (New)
-- `sendNotification()`: Main email notification function using SharePoint links and Graph API (handles DOCX files)
-- `_upload_to_sharepoint_custom()`: Upload transcribed DOCX files to SharePoint with unique names
+### SharePoint and Notifications
+- `sendNotificationWithSummary()`: Enhanced email notification function with both transcription and AI summary SharePoint links
+- `sendNotification()`: Legacy email notification function for transcription only
+- `_upload_to_sharepoint_custom()`: Upload DOCX files to SharePoint with unique names
 - `_send_email_graph()`: Send emails via Microsoft Graph API
 
+
+## Key Functions (lib/ai_tools.py)
+
+### AI Summarization Functions
+- `generate_meeting_summary()`: Generate structured meeting summaries using Ollama with Norwegian prompts
+- `is_ollama_available()`: Check if Ollama service and specified model are accessible
+- `get_available_models()`: List available Ollama models
 
 ## Key Functions (lib/transkripsjon_sp_lib.py)
 
@@ -170,6 +184,29 @@ For full functionality, the Azure App Registration needs these **Application per
 
 - **Audio**: MP3, WAV, M4A
 - **Video**: MP4, MOV, AVI
-- **Output**: DOCX format for all transcribed files
+- **Output**: DOCX format for all transcribed files and AI-generated summaries
 
 Video files and M4A audio are automatically converted to WAV format before transcription.
+
+## AI Summarization Features
+
+### Ollama Integration
+- **Local AI Processing**: Uses Ollama for privacy-preserving AI summarization
+- **Norwegian Language Model**: Optimized prompts for Norwegian meeting abstracts
+- **Default Model**: gpt-oss:20b (configurable via environment variables)
+- **Fallback Behavior**: Gracefully continues without AI summary if Ollama is unavailable
+- **Structured Output**: Generates well-formatted meeting abstracts with AI disclaimer
+
+### Summary Content Structure
+- **Meeting Overview**: Key topics and decisions discussed
+- **Action Items**: Clear listing of follow-up tasks and responsible parties
+- **Timeline Information**: Important dates and deadlines mentioned
+- **AI Disclaimer**: Clear indication that summary is AI-generated and may contain errors
+- **Signature Fields**: Spaces for meeting referent and approver signatures
+
+### Email Notifications
+Users receive two separate SharePoint download links:
+1. **Full Transcription**: Complete word-for-word transcript in DOCX format
+2. **AI Summary**: Structured meeting abstract with key points and action items
+
+Both files are securely stored in SharePoint with user-specific access permissions.

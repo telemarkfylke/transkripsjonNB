@@ -70,7 +70,7 @@ def check_python_imports():
     """Check if all Python dependencies can be imported"""
     imports_to_test = [
         ('azure.storage.blob', 'Azure Blob Storage SDK'),
-        ('openai', 'OpenAI API client'),
+        ('ollama', 'Ollama Python client'),
         ('transformers', 'Transformers library'),
         ('torch', 'PyTorch'),
         ('ffmpeg', 'ffmpeg-python'),

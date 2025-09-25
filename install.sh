@@ -65,6 +65,18 @@ else
     print_status "ffmpeg already installed"
 fi
 
+# Install Ollama if not present
+if ! command -v ollama &> /dev/null; then
+    echo "Installing Ollama..."
+    curl -fsSL https://ollama.ai/install.sh | sh
+    print_status "Ollama installed"
+    print_warning "Please start Ollama service and install the model manually:"
+    print_warning "  ollama serve"
+    print_warning "  ollama pull gpt-oss:20b"
+else
+    print_status "Ollama already installed"
+fi
+
 # Install UV if not present
 if ! command -v uv &> /dev/null; then
     echo "Installing UV..."
@@ -114,8 +126,8 @@ if [ ! -f ".env" ]; then
     echo "Please create a .env file with the following variables:"
     echo "  AZURE_STORAGE_CONNECTION_STRING=your_connection_string"
     echo "  AZURE_STORAGE_CONTAINER_NAME=your_container_name"
-    echo "  OPENAI_API_KEY=your_openai_key"
-    echo "  LOGIC_APP_CHAT_URL=your_logic_app_url"
+    echo "  OLLAMA_MODEL=gpt-oss:20b (for AI summarization)"
+    echo "  OLLAMA_ENDPOINT=http://localhost:11434"
     echo ""
     echo "You can copy .env.example to .env and fill in your values"
 else
@@ -204,16 +216,21 @@ print_status "LaunchAgent plist created at $PLIST_FILE"
 echo -e "${GREEN}✅ Installation completed successfully!${NC}"
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
-echo "1. Configure your .env file with Azure and OpenAI credentials"
-echo "2. Test the installation:"
+echo "1. Configure your .env file with Azure credentials and Ollama settings"
+echo "2. Set up Ollama (if not done automatically):"
+echo "   ${YELLOW}ollama serve${NC} (start service)"
+echo "   ${YELLOW}ollama pull gpt-oss:20b${NC} (download AI model)"
+echo "3. Test the installation:"
 echo "   ${YELLOW}./run_transcription.sh${NC}"
-echo "3. Load the scheduled task:"
+echo "4. Load the scheduled task:"
 echo "   ${YELLOW}launchctl load ~/Library/LaunchAgents/com.tfk.hugin-transcription.plist${NC}"
-echo "4. Check if the service is loaded:"
+echo "5. Check if the service is loaded:"
 echo "   ${YELLOW}launchctl list | grep com.tfk.hugin-transcription${NC}"
-echo "5. Monitor logs:"
+echo "6. Monitor logs:"
 echo "   ${YELLOW}tail -f logs/transcription.stdout${NC}"
 echo "   ${YELLOW}tail -f logs/transcription.stderr${NC}"
 echo ""
 echo "The service will run every 10 minutes once loaded."
 echo "For manual testing, you can also run: ${YELLOW}python HuginLokalTranskripsjon.py${NC}"
+echo ""
+echo -e "${YELLOW}Note: AI summarization will be skipped if Ollama is not running or the model is unavailable${NC}"

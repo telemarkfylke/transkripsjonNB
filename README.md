@@ -1,16 +1,19 @@
 # 🎤 Hugin Transcription Service
 
-An automated Norwegian transcription service customized for use in Telemark Fylkeskommune. The service is using the [National Library of Norway's Whisper model](https://huggingface.co/NbAiLab/nb-whisper-medium) optimized for Apple Silicon (MLX). This service monitors Azure Blob Storage for audio/video files, transcribes them using AI, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
+An automated Norwegian transcription service with AI-powered meeting summarization, customized for use in Telemark Fylkeskommune. The service uses the [National Library of Norway's Whisper model](https://huggingface.co/NbAiLab/nb-whisper-medium) optimized for Apple Silicon (MLX) for transcription, and Ollama for generating structured meeting summaries. This service monitors Azure Blob Storage for audio/video files, transcribes them, creates AI-generated meeting abstracts, uploads results to SharePoint, and delivers secure download links via email notifications using Microsoft Graph API.
 
 ## 🚀 Features
 
 - **Norwegian-optimized transcription** using NbAiLab/nb-whisper-medium-mlx with Apple Silicon GPU acceleration
+- **AI-powered meeting summaries** using Ollama with local language models (privacy-preserving)
 - **Automated file processing** from Azure Blob Storage
 - **Multi-format support** (MP3, MP4, MOV, AVI, WAV, M4A)
+- **Dual document delivery** - full transcription + structured meeting abstract
 - **SharePoint integration** with secure file uploads and user-specific permissions
 - **Email delivery** with SharePoint download links via Microsoft Graph API
 - **Secure file handling** with automatic cleanup and unique filenames
 - **Apple Silicon optimization** for M1/M2/M3/M4 Macs
+- **Graceful AI fallback** - continues without summary if Ollama unavailable
 
 ## 📋 Prerequisites
 
@@ -19,7 +22,7 @@ An automated Norwegian transcription service customized for use in Telemark Fylk
 - **Azure Blob Storage** account
 - **SharePoint** site for file storage
 - **Microsoft Graph API** application registration
-- **OpenAI API** key
+- **Ollama** service with Norwegian-capable language model (e.g., gpt-oss:20b)
 
 ## ⚡ Quick Installation
 
@@ -38,7 +41,7 @@ An automated Norwegian transcription service customized for use in Telemark Fylk
    - Install UV (Python package manager)
    - Install system dependencies (ffmpeg)
    - Create Python virtual environment
-   - Install all Python dependencies
+   - Install all Python dependencies (including Ollama client)
    - Download and cache the MLX Whisper model
    - Set up directory structure
    - Create scheduled task configuration
@@ -49,7 +52,19 @@ An automated Norwegian transcription service customized for use in Telemark Fylk
    # Edit .env with your credentials
    ```
 
-4. **Start the scheduled service:**
+4. **Set up Ollama (for AI summarization):**
+   ```bash
+   # Install Ollama
+   curl -fsSL https://ollama.ai/install.sh | sh
+
+   # Download Norwegian-capable model
+   ollama pull gpt-oss:20b
+
+   # Verify Ollama is running
+   ollama list
+   ```
+
+5. **Start the scheduled service:**
    ```bash
    launchctl load ~/Library/LaunchAgents/com.tfk.hugin-transcription.plist
    ```
@@ -72,8 +87,9 @@ CLIENT_SECRET=your_client_secret
 SHAREPOINT_SITE_URL=your_sharepoint_site_url
 DEFAULT_LIBRARY=Documents
 
-# OpenAI API
-OPENAI_API_KEY=your_openai_api_key
+# Ollama Configuration (for AI summarization)
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_ENDPOINT=http://localhost:11434
 ```
 
 ### Microsoft Graph API Permissions
@@ -92,17 +108,19 @@ Configure your Azure App Registration with these **Application permissions**:
 1. **File Upload**: Users upload audio/video files to Azure Blob Storage with metadata
 2. **Detection**: Service checks for new files every 30 minutes
 3. **Download**: Files are securely downloaded to temporary storage
-4. **Processing**: 
+4. **Processing**:
    - Video files and M4A audio converted to WAV format (ffmpeg)
    - Audio transcribed using Norwegian MLX Whisper model with Apple Silicon GPU acceleration
+   - AI-powered meeting summary generated using Ollama (if available)
    - Text cleaned and formatted
-   - Transcription converted to DOCX format
+   - Both transcription and summary converted to DOCX format
 5. **SharePoint Upload**:
-   - Transcribed files uploaded to SharePoint as DOCX documents with unique names (filename_timestamp.docx)
+   - Transcription uploaded as `filename_transkripsjon_timestamp.docx`
+   - AI summary uploaded as `filename_sammendrag_timestamp.docx`
    - User-specific permissions applied (only requesting user can access)
-   - Secure sharing links generated
-6. **Delivery**: 
-   - Email sent with SharePoint download link (via Microsoft Graph API)
+   - Secure sharing links generated for both files
+6. **Delivery**:
+   - Email sent with SharePoint download links for both transcription and summary (via Microsoft Graph API)
 7. **Cleanup**: All temporary files automatically deleted
 
 ## 🧪 Testing
@@ -157,7 +175,8 @@ launchctl list | grep hugin-transcription
 ├── HuginLokalTranskripsjon.py    # Main orchestrator
 ├── lib/
 │   ├── hugintranskriptlib.py     # Core functions library
-│   └── transkripsjon_sp_lib.py   # SharePoint/Graph API library
+│   ├── transkripsjon_sp_lib.py   # SharePoint/Graph API library
+│   └── ai_tools.py               # AI summarization (Ollama integration)
 ├── test_notification.py          # Test email notification system
 ├── test_graph_api.py             # Test Graph API email function
 ├── .venv/                        # UV virtual environment
@@ -200,9 +219,9 @@ flake8 .
 
 **Core:**
 - MLX Whisper (Apple Silicon GPU accelerated)
+- Ollama Python client (for AI summarization)
 - Azure Blob Storage SDK
 - Microsoft Graph API SDK (requests)
-- OpenAI API client
 - ffmpeg for audio conversion
 
 **Full list in `pyproject.toml`**

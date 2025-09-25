@@ -6,7 +6,6 @@ import logging
 import re
 import warnings
 import dotenv
-from openai import OpenAI
 from docx import Document
 
 # Ignorer advarsler
@@ -37,8 +36,7 @@ def validate_environment():
     """Validerer at alle påkrevde miljøvariabler er satt"""
     required_vars = [
         "AZURE_STORAGE_CONNECTION_STRING",
-        "AZURE_STORAGE_CONTAINER_NAME", 
-        "OPENAI_API_KEY"
+        "AZURE_STORAGE_CONTAINER_NAME"
     ]
     
     missing_vars = []
@@ -82,18 +80,10 @@ def get_file_extension(filename):
 dotenv.load_dotenv()
 validate_environment()
 
-# Initialiser OpenAI klient
-try:
-    client = OpenAI()
-    logger.info("OpenAI klient initialisert")
-except Exception as e:
-    logger.error(f"Kunne ikke initialisere OpenAI klient: {e}")
-    sys.exit(1)
 
 # Hent validerte miljøvariabler
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 try:
     logger.info("=" * 80)
@@ -203,6 +193,19 @@ try:
             duration = end_time - start_time
             logger.info(f"✅ Transkripsjon fullført på {duration:.1f} sekunder")
 
+            # Generer AI-sammendrag
+            logger.info(f"🤖 Starter AI-sammendrag generering...")
+            ai_summary_start = time.time()
+            base_name = safe_filename.rsplit('.', 1)[0]
+            summary_files = htl.create_ai_summary(base_name)
+            ai_summary_duration = time.time() - ai_summary_start
+
+            if summary_files:
+                logger.info(f"✅ AI-sammendrag generert på {ai_summary_duration:.1f} sekunder")
+                logger.info(f"📄 AI-sammendrag filer: {list(summary_files.keys())}")
+            else:
+                logger.warning(f"⚠️  AI-sammendrag ikke generert (Ollama ikke tilgjengelig eller feil)")
+
             # Konverter SRT til tekst kun hvis SRT-fil eksisterer
             base_name = safe_filename.rsplit('.', 1)[0]
             srt_file_path = f"./ferdig_tekst/{base_name}.srt"
@@ -249,38 +252,24 @@ try:
                 logger.error(f"❌ Kunne ikke opprette DOCX for transkripsjon {safe_filename}: {e}")
                 continue
             
-            # Opprett docx-fil for oppsummering (hvis den eksisterer)
-            oppsummering_txt_path = f"./oppsummeringer/{base_name}.txt"
-            oppsummering_docx_path = f"./oppsummeringer/{base_name}.docx"
-            
-            if os.path.exists(oppsummering_txt_path):
-                try:
-                    with open(oppsummering_txt_path, "r", encoding='utf-8') as file:
-                        text = file.read()
-                        doc = Document()
-                        doc.add_paragraph(text)
-                        doc.save(oppsummering_docx_path)
-                    logger.info(f"Opprettet DOCX-fil for oppsummering: {safe_filename}")
-                except Exception as e:
-                    logger.error(f"Kunne ikke opprette DOCX for oppsummering {safe_filename}: {e}")
-            
             # Send varsler med SharePoint nedlastingslenker
             logger.info("📧 Varsler med SharePoint-lenker...")
             try:
                 if i-1 < len(metadata) and 'upn' in metadata[i-1]:
                     recipient = metadata[i-1]["upn"]
                     logger.info(f"📧 Varsler til: {recipient}")
-                    
+
                     # Opprett transcribed_files dict for sendNotification
                     transcribed_files = {
                         'docx': transcribed_docx_path
                     }
-                    
-                    # Send varsler med SharePoint-lenker
-                    success = htl.sendNotification(recipient, transcribed_files, safe_filename)
-                    
+
+                    # Send varsler med SharePoint-lenker (inkludert AI-sammendrag hvis tilgjengelig)
+                    success = htl.sendNotificationWithSummary(recipient, transcribed_files, summary_files, safe_filename)
+
                     if success:
-                        logger.info(f"✅ Varsel med SharePoint-lenker sendt til {recipient}")
+                        summary_msg = " (med AI-sammendrag)" if summary_files else ""
+                        logger.info(f"✅ Varsel med SharePoint-lenker sendt til {recipient}{summary_msg}")
                     else:
                         logger.error(f"❌ Kunne ikke sende varsel til {recipient}")
                 else:
@@ -293,10 +282,15 @@ try:
             cleanup_files = [
                 local_file_path,
                 txt_file_path,
-                transcribed_docx_path,
-                oppsummering_txt_path,
-                oppsummering_docx_path
+                transcribed_docx_path
             ]
+
+            # Legg til AI-sammendrag filer for opprydding hvis de eksisterer
+            if summary_files:
+                if summary_files.get('txt'):
+                    cleanup_files.append(summary_files['txt'])
+                if summary_files.get('docx'):
+                    cleanup_files.append(summary_files['docx'])
             
             # Rydd også opp SRT-filer hvis de eksisterer
             srt_file_path = f"./ferdig_tekst/{base_name}.srt"

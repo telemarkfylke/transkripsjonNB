@@ -9,14 +9,15 @@ import ffmpeg
 from datetime import datetime, timedelta
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from transformers import pipeline
-from openai import OpenAI
 from docx import Document
 import mlx.core as mx
 import mlx_whisper
 try:
     from .transkripsjon_sp_lib import hentToken
+    from .ai_tools import generate_meeting_summary, is_ollama_available
 except ImportError:
     from transkripsjon_sp_lib import hentToken
+    from ai_tools import generate_meeting_summary, is_ollama_available
 
 # Ensure ffmpeg is in PATH
 os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
@@ -167,56 +168,6 @@ def transkriber(sti, filnavn, word_timestamps=False):
         else:
             print(f'Transkripsjonen er lagret i ./ferdig_tekst/{filnavn.split(".")[0]}.txt')
 
-# Lag oppsummeringer
-def oppsummering(sti, filnavn, språk, format):
-    client = OpenAI()
-    # Importer srt-fil og legg innholdet i en variabel som heter tekst
-    undertekstfil = sti + filnavn + ".srt"
-    tekst = ""
-    if språk == "":
-        språk = "norsk"
-    else:
-        språk = språk
-    if format == "":
-        format = "oppsummering"
-    else:
-        format = format
-
-    oppsummering = filnavn
-
-    with open(undertekstfil, "r") as file:
-        tekst = file.read()
-
-    # Systeminstruksjoner
-    systeminstruksjon_oppsummering = "Brukeren legger inn en tekst som er en transkripsjon av et møte eller foredrag. Teksten er formatert som en srt-undertekstfil. Din oppgave er å lage et korrekt og nøyaktig referat av innholdet. Følg disse instruksene: 1. Det er viktig at oppsummeringen er helt riktig. 2. Skriv overskrifter når det er nytt tema. 3. Oppsummeringen skal være fyldig og beskrive hva det ble snakket om. 4. Oversett eller forklar forkortelser og fagbegreper når disse er vanskelige. 5. Bruk et klart og tydelig språk som er lett å forstå. 6. Oppsummeringen skal være på ca 1500 ord. 7. Oppsummeringen skal være på markdown-format. 8. Oppsummeringen skal være på " + språk + ". 9. Viktig: Formen på oppsummeringen skal være på formatet:" + format + ". Her er srt-filen:"
-    
-    systeminstruksjon_moteref = "Du har fått i oppgave å lage et møtereferat fra en SRT-fil som inneholder tekstutskrift med tidsmerker fra et møte. Her er instruksjonene for å lage et effektivt og nøyaktig referat: Tidsmerker: Ignorer de eksakte tidsmerkene, men bruk dem som referanse for å identifisere skift i topics eller start/slutt på ulike diskusjonspunkter. Identifisering: Forsøk å identifisere forskjellige stemmer/talere dersom det er mulig, og tilordne kommentarer til riktig person. Bruk generelle beskrivelser som 'Leder', 'Deltaker 1', med mindre det er spesifikke navn. Konsistens: Oppsummer lange diskusjoner kortfattet, men behold alle viktige detaljer og beslutninger. Utelat fyllstoff som ikke påvirker forståelsen av møtet. Struktur: Organiser referatet i seksjoner basert på møteagendaen, hvis tilgjengelig. Hvis ikke, del inn i logiske seksjoner som diskuterer forskjellige emner. Beslutninger og Oppfølging: Sørg for at alle beslutninger, oppfølgingspunkter, og ansvarlige personer er tydelig notert. Språk: Sikre at språket er klart og profesjonelt, hvor teknisk terminologi er forklart eller utdypet dersom det kan bli misforstått. Du skal aldri skrive noe som ikke er sagt i møtet! Det er veldig viktig at du kune skriver ting som er sagt i møtet. Vennligst les gjennom SRT-filen og lag et møtereferat som følger disse retningslinjene. Møtereferatet skal være på " + språk + ". Her er SRT-filen:"
-
-    systeminstruksjon = ""
-    if format == "motereferat":
-        systeminstruksjon = systeminstruksjon_moteref
-    else:
-        systeminstruksjon = systeminstruksjon_oppsummering
-
-    completion = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[
-        {"role": "system", "content": systeminstruksjon},
-        {"role": "user", "content": tekst}
-    ]
-    )
-
-    # Sørg for at utdata-mappe eksisterer
-    os.makedirs("./oppsummeringer", exist_ok=True)
-    
-    # Skriv til markdown-fil
-    with open("./oppsummeringer/" + oppsummering + ".md", "w") as file:
-        file.write(completion.choices[0].message.content)
-
-    # Skriv til docx-fil
-    doc = Document()
-    doc.add_paragraph(completion.choices[0].message.content)
-    doc.save("./oppsummeringer/" + oppsummering + ".docx")
 
 # Konverterer srt-fil til ren telst med kun tekst uten tidskoder og index
 def srt_til_tekst(filnavn):
@@ -234,6 +185,200 @@ def srt_til_tekst(filnavn):
     # Skriv for hvert element i ren_tekst skriv en ny linje i en docx-fil
     with open("./oppsummeringer/" + filnavn.split(".")[0] + ".txt", 'w', encoding='utf-8') as f:
         f.write("".join(ren_tekst))
+
+
+def create_ai_summary(filnavn: str, model: str = "gpt-oss:20b") -> dict:
+    """
+    Create AI-generated meeting summary using Ollama from transcribed text
+
+    Args:
+        filnavn: Base filename (without extension) of the transcribed file
+        model: Ollama model to use for summarization
+
+    Returns:
+        dict: Paths to generated summary files {'txt': path, 'docx': path} or empty dict if failed
+    """
+    logger.info(f"Creating AI summary for {filnavn}")
+
+    # Check if Ollama is available
+    if not is_ollama_available(model):
+        logger.warning(f"Ollama model '{model}' not available, skipping AI summary")
+        return {}
+
+    # Read transcribed text
+    text_file_path = f"./ferdig_tekst/{filnavn}.txt"
+    if not os.path.exists(text_file_path):
+        logger.error(f"Transcribed text file not found: {text_file_path}")
+        return {}
+
+    try:
+        with open(text_file_path, 'r', encoding='utf-8') as f:
+            transcription_text = f.read()
+
+        if not transcription_text.strip():
+            logger.warning(f"Transcribed text file is empty: {text_file_path}")
+            return {}
+
+        # Generate summary using Ollama
+        logger.info(f"Generating summary using model: {model}")
+        summary_text = generate_meeting_summary(transcription_text, model)
+
+        if not summary_text:
+            logger.error("Failed to generate summary with Ollama")
+            return {}
+
+        # Ensure output directory exists
+        os.makedirs("./oppsummeringer", exist_ok=True)
+
+        # Save summary as text file
+        summary_txt_path = f"./oppsummeringer/{filnavn}_ai_sammendrag.txt"
+        with open(summary_txt_path, 'w', encoding='utf-8') as f:
+            f.write(summary_text)
+
+        # Save summary as DOCX file
+        summary_docx_path = f"./oppsummeringer/{filnavn}_ai_sammendrag.docx"
+        doc = Document()
+
+        # Split text into paragraphs for better formatting
+        paragraphs = summary_text.split('\n\n')
+        for paragraph in paragraphs:
+            if paragraph.strip():
+                doc.add_paragraph(paragraph.strip())
+
+        doc.save(summary_docx_path)
+
+        logger.info(f"AI summary saved to {summary_txt_path} and {summary_docx_path}")
+
+        return {
+            'txt': summary_txt_path,
+            'docx': summary_docx_path
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating AI summary: {str(e)}")
+        return {}
+
+
+def sendNotificationWithSummary(upn: str, transcribed_files: dict, summary_files: dict, original_blob_name: str) -> bool:
+    """
+    Send email notification with SharePoint download links for both transcription and AI summary
+
+    Args:
+        upn: User Principal Name (email) of the recipient
+        transcribed_files: Dict with transcription file paths {'docx': 'path/to/file.docx'}
+        summary_files: Dict with AI summary file paths {'docx': 'path/to/summary.docx'} (can be empty)
+        original_blob_name: Original blob filename for unique naming
+
+    Returns:
+        bool: True if email notification sent successfully
+    """
+    if not upn:
+        logger.error("UPN er påkrevd for sendNotificationWithSummary")
+        raise ValueError("UPN er påkrevd")
+
+    if not transcribed_files.get('docx'):
+        logger.error("DOCX-fil er påkrevd for sendNotificationWithSummary")
+        raise ValueError("DOCX-fil er påkrevd")
+
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = os.path.splitext(original_blob_name)[0]
+
+        # Upload transcription file
+        trans_unique_filename = f"{base_filename}_transkripsjon_{timestamp}.docx"
+        logger.info(f"Laster opp transkripsjon til SharePoint med navn: {trans_unique_filename}")
+
+        os.makedirs("./dokumenter", exist_ok=True)
+        trans_temp_path = f"./dokumenter/{trans_unique_filename}"
+
+        import shutil
+        shutil.copy2(transcribed_files['docx'], trans_temp_path)
+
+        transcription_url = _upload_to_sharepoint_custom(upn, trans_temp_path)
+
+        if os.path.exists(trans_temp_path):
+            os.remove(trans_temp_path)
+
+        if not transcription_url:
+            logger.error("SharePoint opplasting av transkripsjon feilet")
+            return False
+
+        # Upload AI summary file if available
+        summary_url = None
+        if summary_files.get('docx') and os.path.exists(summary_files['docx']):
+            summary_unique_filename = f"{base_filename}_sammendrag_{timestamp}.docx"
+            logger.info(f"Laster opp AI-sammendrag til SharePoint med navn: {summary_unique_filename}")
+
+            summary_temp_path = f"./dokumenter/{summary_unique_filename}"
+            shutil.copy2(summary_files['docx'], summary_temp_path)
+
+            summary_url = _upload_to_sharepoint_custom(upn, summary_temp_path)
+
+            if os.path.exists(summary_temp_path):
+                os.remove(summary_temp_path)
+
+            if summary_url:
+                logger.info(f"SharePoint opplasting av sammendrag vellykket: {summary_url}")
+            else:
+                logger.warning("SharePoint opplasting av sammendrag feilet - fortsetter uten sammendrag")
+
+        # Create email notification message with download links
+        email_message = f"""Hei,
+
+Din transkripsjonsjobb er nå ferdig behandlet.
+
+TRANSKRIPSJON:
+Du kan laste ned den transkriberte filen ved å klikke på lenken nedenfor:
+{transcription_url}"""
+
+        if summary_url:
+            email_message += f"""
+
+AI-SAMMENDRAG:
+Du kan også laste ned et AI-generert sammendrag av møtet:
+{summary_url}"""
+
+        email_message += """
+
+Filene er lagret trygt i SharePoint og kun du har tilgang til dem.
+
+VIKTIG PERSONVERNHENSYN:
+Vær forsiktig med hvordan du bruker transkripsjonen videre i andre tjenester. Dersom transkripsjonen inneholder personopplysninger, må du følge gjeldende personvernregler og kun dele informasjonen med personer som har et tjenstlig behov for den.
+
+Takk for at du bruker transkripsjonstjenesten i Hugin.
+
+Med vennlig hilsen
+Hugin Transkripsjonstjeneste
+Telemark Fylkeskommune"""
+
+        # Send email notification using Graph API
+        logger.info(f"Sender e-post via Graph API til {upn} med lenker")
+        email_subject = "Transkripsjon ferdig" + (" (med AI-sammendrag)" if summary_url else "") + " - Hugin"
+        email_success = _send_email_graph(upn, email_subject, email_message)
+
+        if email_success:
+            logger.info(f"E-post med SharePoint-lenker sendt til {upn}")
+        else:
+            logger.error(f"E-post sending feilet for {upn}")
+
+        return email_success
+
+    except Exception as e:
+        logger.error(f"sendNotificationWithSummary feilet for {upn}: {e}")
+        # Send error notification as fallback
+        error_message = """Hei,
+
+Din transkripsjonsjobb er ferdig behandlet, men det oppstod et teknisk problem med å laste opp filen til SharePoint.
+
+Vennligst kontakt support for assistanse med å hente din transkriberte fil.
+
+Vi beklager uleiligheten.
+
+Med vennlig hilsen
+Hugin Transkripsjonstjeneste
+Telemark Fylkeskommune"""
+        _send_error_notification(upn, error_message)
+        return False
 
 
 def sendNotification(upn: str, transcribed_files: dict, original_blob_name: str) -> bool:
