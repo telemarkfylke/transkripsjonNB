@@ -74,6 +74,58 @@ def konverter_til_lyd(filnavn, nytt_filnavn):
     ffmpeg.input(filnavn).output(nytt_filnavn, acodec='pcm_s16le', format='wav').run(overwrite_output=True)
     print(f'Konvertering ferdig. Lydfilen er lagret som {nytt_filnavn}')
 
+def _format_text_with_paragraphs(result: dict, silence_threshold: float = 2.0) -> str:
+    """
+    Format transcribed text with paragraph breaks based on silence detection.
+
+    Args:
+        result: Whisper transcription result containing segments
+        silence_threshold: Minimum silence duration (in seconds) to create a paragraph break
+
+    Returns:
+        Formatted text with paragraph breaks, preserving all original words
+    """
+    # If no segments available, return the full text as-is
+    if 'segments' not in result or not result['segments']:
+        return result.get('text', '').strip()
+
+    segments = result['segments']
+    paragraphs = []
+    current_paragraph = []
+
+    for i, segment in enumerate(segments):
+        text = segment.get('text', '').strip()
+
+        if not text:
+            continue
+
+        # Add segment text to current paragraph
+        current_paragraph.append(text)
+
+        # Check if there's a significant pause before the next segment
+        if i < len(segments) - 1:
+            current_end = segment.get('end', 0.0)
+            next_start = segments[i + 1].get('start', 0.0)
+            silence_duration = next_start - current_end
+
+            # If silence exceeds threshold, start a new paragraph
+            if silence_duration >= silence_threshold:
+                # Join current paragraph and add to paragraphs list
+                paragraph_text = ' '.join(current_paragraph).strip()
+                if paragraph_text:
+                    paragraphs.append(paragraph_text)
+                current_paragraph = []
+
+    # Add any remaining text as the final paragraph
+    if current_paragraph:
+        paragraph_text = ' '.join(current_paragraph).strip()
+        if paragraph_text:
+            paragraphs.append(paragraph_text)
+
+    # Join paragraphs with double newlines
+    return '\n\n'.join(paragraphs)
+
+
 # Transkriber blob og lagrer i SRT-fil
 def transkriber(sti, filnavn, word_timestamps=False):
         print(f'Transkriberer lyd fra {filnavn} til tekst. Obs: Dette er en tidkrevende prosess.')
@@ -118,12 +170,11 @@ def transkriber(sti, filnavn, word_timestamps=False):
         # Sørg for at utdata-mappe eksisterer
         os.makedirs("./ferdig_tekst", exist_ok=True)
 
-        # Always create text file
-        full_text = result.get('text', '')
-        tekst_data = [f"{full_text}\n"] if full_text else []
+        # Create formatted text with paragraph breaks based on silence detection
+        formatted_text = _format_text_with_paragraphs(result)
 
         with open(f"./ferdig_tekst/{filnavn.split('.')[0]}.txt", 'w', encoding='utf-8') as f:
-            f.write(''.join(tekst_data))
+            f.write(formatted_text)
 
         # Only create SRT file if word_timestamps is True
         if word_timestamps:
